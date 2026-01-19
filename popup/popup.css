@@ -810,6 +810,12 @@ body {
   text-align: center;
 }
 
+.disclaimer .created-by {
+  margin-top: 8px;
+  font-weight: 600;
+  color: #374151;
+}
+
 /* Courses Tab GPA Summary */
 .courses-gpa-summary {
   margin-bottom: 16px;
@@ -1376,6 +1382,10 @@ body.dark-mode {
 .dark-mode .disclaimer {
   background: #374151;
   color: #9ca3af;
+}
+
+.dark-mode .disclaimer .created-by {
+  color: #e5e7eb;
 }
 
 /* Dark mode placeholder */
