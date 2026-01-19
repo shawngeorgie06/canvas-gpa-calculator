@@ -1388,6 +1388,125 @@ body.dark-mode {
   color: #e5e7eb;
 }
 
+/* What-If Calculator */
+.whatif-section {
+  background: white;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.whatif-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.whatif-form {
+  margin-top: 12px;
+}
+
+.whatif-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  align-items: flex-end;
+}
+
+.whatif-input {
+  flex: 1;
+}
+
+.whatif-input label {
+  display: block;
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.whatif-input input,
+.whatif-input select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.whatif-row .btn {
+  height: 38px;
+  white-space: nowrap;
+}
+
+.whatif-result {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.whatif-result.success {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.whatif-result.warning {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.whatif-result.impossible {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.whatif-result .result-score {
+  font-size: 24px;
+  font-weight: 700;
+  display: block;
+  margin: 8px 0;
+}
+
+.whatif-result .result-message {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+/* Dark mode What-If */
+.dark-mode .whatif-section {
+  background: #374151;
+}
+
+.dark-mode .whatif-section h3 {
+  color: #f9fafb;
+}
+
+.dark-mode .whatif-input label {
+  color: #9ca3af;
+}
+
+.dark-mode .whatif-result.success {
+  background: #064e3b;
+  color: #a7f3d0;
+  border-color: #065f46;
+}
+
+.dark-mode .whatif-result.warning {
+  background: #78350f;
+  color: #fde68a;
+  border-color: #92400e;
+}
+
+.dark-mode .whatif-result.impossible {
+  background: #7f1d1d;
+  color: #fecaca;
+  border-color: #991b1b;
+}
+
 /* Dark mode placeholder */
 .dark-mode .placeholder {
   color: #6b7280;

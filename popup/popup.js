@@ -463,6 +463,17 @@ function setupEventListeners() {
   // Target GPA calculator
   elements.calculateTarget.addEventListener('click', calculateTargetGPA);
 
+  // What-If Calculator
+  const whatifCourse = document.getElementById('whatifCourse');
+  if (whatifCourse) {
+    whatifCourse.addEventListener('change', handleWhatIfCourseChange);
+  }
+
+  const calculateWhatifBtn = document.getElementById('calculateWhatif');
+  if (calculateWhatifBtn) {
+    calculateWhatifBtn.addEventListener('click', calculateWhatIf);
+  }
+
   // Settings - Connection
   elements.saveConnection.addEventListener('click', saveConnection);
   elements.testConnection.addEventListener('click', testConnection);
@@ -817,6 +828,7 @@ function filterCoursesBySemester() {
   updateCoursesGPADisplay();
   renderCoursesList();
   renderCourseImpact();
+  populateWhatIfCourses();
 }
 
 /**
@@ -1726,6 +1738,123 @@ function renderCourseImpact() {
   } catch (error) {
     console.error('Error rendering course impact:', error);
     elements.courseImpactList.innerHTML = '<p class="placeholder">Could not calculate impact</p>';
+  }
+}
+
+/**
+ * Populate What-If Calculator course dropdown
+ */
+function populateWhatIfCourses() {
+  const select = document.getElementById('whatifCourse');
+  if (!select) return;
+
+  // Only show current semester courses with grades
+  const coursesWithGrades = state.courses.filter(c =>
+    c.calculatedGrade != null || c.letterGrade
+  );
+
+  if (coursesWithGrades.length === 0) {
+    select.innerHTML = '<option value="">No courses with grades</option>';
+    return;
+  }
+
+  select.innerHTML = '<option value="">Select a course</option>' +
+    coursesWithGrades.map(c =>
+      `<option value="${c.id}" data-grade="${c.calculatedGrade || ''}">${c.name}</option>`
+    ).join('');
+}
+
+/**
+ * Handle What-If course selection
+ */
+function handleWhatIfCourseChange() {
+  const select = document.getElementById('whatifCourse');
+  const currentInput = document.getElementById('whatifCurrent');
+
+  if (!select || !currentInput) return;
+
+  const selectedOption = select.options[select.selectedIndex];
+  const grade = selectedOption?.dataset?.grade;
+
+  if (grade) {
+    currentInput.value = parseFloat(grade).toFixed(1);
+  }
+}
+
+/**
+ * Calculate What-If result
+ */
+function calculateWhatIf() {
+  const currentGrade = parseFloat(document.getElementById('whatifCurrent')?.value);
+  const finalWeight = parseFloat(document.getElementById('whatifFinalWeight')?.value);
+  const desiredGrade = parseFloat(document.getElementById('whatifDesired')?.value);
+  const resultDiv = document.getElementById('whatifResult');
+
+  if (!resultDiv) return;
+
+  // Validate inputs
+  if (isNaN(currentGrade) || isNaN(finalWeight) || isNaN(desiredGrade)) {
+    resultDiv.className = 'whatif-result warning';
+    resultDiv.classList.remove('hidden');
+    resultDiv.innerHTML = '<span class="result-message">Please fill in all fields</span>';
+    return;
+  }
+
+  if (finalWeight <= 0 || finalWeight > 100) {
+    resultDiv.className = 'whatif-result warning';
+    resultDiv.classList.remove('hidden');
+    resultDiv.innerHTML = '<span class="result-message">Final weight must be between 1-100%</span>';
+    return;
+  }
+
+  // Calculate required final exam score
+  // Formula: desired = (current * (100 - finalWeight) + finalScore * finalWeight) / 100
+  // Solving for finalScore: finalScore = (desired * 100 - current * (100 - finalWeight)) / finalWeight
+  const currentWeight = 100 - finalWeight;
+  const requiredScore = (desiredGrade * 100 - currentGrade * currentWeight) / finalWeight;
+
+  resultDiv.classList.remove('hidden');
+
+  if (requiredScore <= 0) {
+    // Already achieved
+    resultDiv.className = 'whatif-result success';
+    resultDiv.innerHTML = `
+      <span class="result-message">Great news!</span>
+      <span class="result-score">Already there! 🎉</span>
+      <span class="result-message">You've already secured this grade. Even a 0% on the final keeps you above ${desiredGrade}%!</span>
+    `;
+  } else if (requiredScore <= 60) {
+    // Easily achievable
+    resultDiv.className = 'whatif-result success';
+    resultDiv.innerHTML = `
+      <span class="result-message">You need to score at least:</span>
+      <span class="result-score">${requiredScore.toFixed(1)}%</span>
+      <span class="result-message">on your final exam. Very achievable!</span>
+    `;
+  } else if (requiredScore <= 90) {
+    // Achievable but challenging
+    resultDiv.className = 'whatif-result warning';
+    resultDiv.innerHTML = `
+      <span class="result-message">You need to score at least:</span>
+      <span class="result-score">${requiredScore.toFixed(1)}%</span>
+      <span class="result-message">on your final exam. Study hard!</span>
+    `;
+  } else if (requiredScore <= 100) {
+    // Difficult but possible
+    resultDiv.className = 'whatif-result warning';
+    resultDiv.innerHTML = `
+      <span class="result-message">You need to score at least:</span>
+      <span class="result-score">${requiredScore.toFixed(1)}%</span>
+      <span class="result-message">on your final exam. It's tough but possible!</span>
+    `;
+  } else {
+    // Impossible
+    resultDiv.className = 'whatif-result impossible';
+    resultDiv.innerHTML = `
+      <span class="result-message">Unfortunately...</span>
+      <span class="result-score">Not possible 😔</span>
+      <span class="result-message">You would need ${requiredScore.toFixed(1)}% on the final, which exceeds 100%. Consider aiming for a ${desiredGrade - 10}% grade instead.</span>
+    `;
   }
 }
 
