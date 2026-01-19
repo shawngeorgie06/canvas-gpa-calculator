@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Canvas GPA Calculator - Installation Guide</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    h1 {
+      color: #1e40af;
+      border-bottom: 3px solid #1e40af;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #1e40af;
+      margin-top: 30px;
+    }
+    h3 {
+      color: #374151;
+    }
+    .step {
+      background: #f3f4f6;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin: 15px 0;
+      border-left: 4px solid #1e40af;
+    }
+    .step-number {
+      display: inline-block;
+      background: #1e40af;
+      color: white;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 28px;
+      font-weight: bold;
+      margin-right: 10px;
+    }
+    code {
+      background: #e5e7eb;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'Consolas', monospace;
+    }
+    .warning {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin: 15px 0;
+    }
+    .tip {
+      background: #d1fae5;
+      border-left: 4px solid #10b981;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin: 15px 0;
+    }
+    img {
+      max-width: 100%;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      margin: 10px 0;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      text-align: center;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Canvas GPA Calculator</h1>
+<p><strong>Installation Guide</strong></p>
+<p>Created by Shawn Georgie</p>
+
+<hr>
+
+<h2>Part 1: Download the Extension</h2>
+
+<div class="step">
+  <span class="step-number">1</span>
+  <strong>Download from GitHub</strong>
+  <p>Go to: <code>https://github.com/shawngeorgie06/canvas-gpa-calculator</code></p>
+  <p>Click the green <strong>"Code"</strong> button, then click <strong>"Download ZIP"</strong></p>
+</div>
+
+<div class="step">
+  <span class="step-number">2</span>
+  <strong>Extract the ZIP file</strong>
+  <p>Find the downloaded file (usually in your Downloads folder)</p>
+  <p>Right-click and select <strong>"Extract All"</strong></p>
+  <p>Remember where you extract it - you'll need this location later</p>
+</div>
+
+<h2>Part 2: Install in Chrome</h2>
+
+<div class="step">
+  <span class="step-number">3</span>
+  <strong>Open Chrome Extensions</strong>
+  <p>Open Google Chrome</p>
+  <p>Type <code>chrome://extensions</code> in the address bar and press Enter</p>
+</div>
+
+<div class="step">
+  <span class="step-number">4</span>
+  <strong>Enable Developer Mode</strong>
+  <p>In the top-right corner, toggle ON <strong>"Developer mode"</strong></p>
+</div>
+
+<div class="step">
+  <span class="step-number">5</span>
+  <strong>Load the Extension</strong>
+  <p>Click <strong>"Load unpacked"</strong> button (top-left)</p>
+  <p>Navigate to the extracted folder: <code>canvas-gpa-calculator-master</code></p>
+  <p>Click <strong>"Select Folder"</strong></p>
+</div>
+
+<div class="tip">
+  <strong>Success!</strong> You should now see "Canvas Grade & GPA Calculator" in your extensions list with a puzzle piece icon in your Chrome toolbar.
+</div>
+
+<h2>Part 3: Connect to Canvas</h2>
+
+<div class="step">
+  <span class="step-number">6</span>
+  <strong>Get Your Canvas API Token</strong>
+  <p>Log in to your school's Canvas website</p>
+  <p>Click your <strong>profile icon</strong> (top-right corner)</p>
+  <p>Click <strong>"Settings"</strong></p>
+  <p>Scroll down to <strong>"Approved Integrations"</strong></p>
+  <p>Click <strong>"+ New Access Token"</strong></p>
+  <p>Enter a purpose (e.g., "GPA Calculator")</p>
+  <p>Click <strong>"Generate Token"</strong></p>
+  <p><strong>IMPORTANT:</strong> Copy the token immediately - you won't be able to see it again!</p>
+</div>
+
+<div class="warning">
+  <strong>Keep your token secure!</strong> It grants access to your Canvas account. Never share it with anyone.
+</div>
+
+<div class="step">
+  <span class="step-number">7</span>
+  <strong>Configure the Extension</strong>
+  <p>Click the extension icon (puzzle piece) in Chrome toolbar</p>
+  <p>Go to the <strong>"Settings"</strong> tab</p>
+  <p>Enter your school's Canvas URL:</p>
+  <ul>
+    <li>NJIT: <code>https://njit.instructure.com</code></li>
+    <li>Rutgers: <code>https://rutgers.instructure.com</code></li>
+    <li>Other schools: <code>https://[your-school].instructure.com</code></li>
+  </ul>
+  <p>Paste your API token</p>
+  <p>Click <strong>"Save & Connect"</strong></p>
+</div>
+
+<div class="step">
+  <span class="step-number">8</span>
+  <strong>Select Your Grading Scale</strong>
+  <p>In Settings, find <strong>"Grading Scale"</strong></p>
+  <p>Select the scale that matches your school:</p>
+  <ul>
+    <li><strong>NJIT:</strong> A=4.0, B+=3.5, B=3.0, C+=2.5, C=2.0, D=1.0</li>
+    <li><strong>Standard Plus/Minus:</strong> A=4.0, A-=3.7, B+=3.3, B=3.0, etc.</li>
+    <li><strong>Standard:</strong> A=4.0, B=3.0, C=2.0, D=1.0</li>
+    <li><strong>Custom:</strong> Define your own values</li>
+  </ul>
+</div>
+
+<h2>Part 4: Using the Extension</h2>
+
+<h3>Dashboard Tab</h3>
+<ul>
+  <li><strong>Semester GPA:</strong> Your GPA for the selected semester</li>
+  <li><strong>Cumulative GPA:</strong> Average of all completed semester GPAs</li>
+  <li><strong>Quick Course Impact:</strong> Shows which courses to focus on for max GPA improvement</li>
+  <li><strong>Target GPA Planner:</strong> Calculate what GPA you need to reach your goal</li>
+</ul>
+
+<h3>Courses Tab</h3>
+<ul>
+  <li>View all courses for the selected semester</li>
+  <li>Edit grades, credits, or semester for any course</li>
+  <li>Add manual courses (for classes not in Canvas)</li>
+  <li>Exclude courses from GPA calculation</li>
+</ul>
+
+<h3>Features</h3>
+<ul>
+  <li><strong>Auto-Sync:</strong> Grades update automatically every 15 minutes</li>
+  <li><strong>Dark Mode:</strong> Click the moon icon to toggle</li>
+  <li><strong>Upcoming Semesters:</strong> Automatically excluded from cumulative GPA</li>
+  <li><strong>N/A Grades:</strong> Use for courses without grades yet</li>
+</ul>
+
+<h2>Troubleshooting</h2>
+
+<div class="warning">
+  <strong>"Invalid API token" error?</strong>
+  <p>Make sure you copied the entire token. Generate a new one if needed.</p>
+</div>
+
+<div class="warning">
+  <strong>Courses not showing?</strong>
+  <p>Check that your Canvas URL is correct (include https://)</p>
+  <p>Make sure you're enrolled in active courses</p>
+</div>
+
+<div class="warning">
+  <strong>Wrong GPA calculation?</strong>
+  <p>Verify you selected the correct grading scale for your school</p>
+  <p>Check that course credits are correct (click to edit)</p>
+</div>
+
+<hr>
+
+<div class="footer">
+  <p><strong>Canvas GPA Calculator</strong></p>
+  <p>Created by Shawn Georgie</p>
+  <p>GitHub: github.com/shawngeorgie06/canvas-gpa-calculator</p>
+  <p><em>Not affiliated with Canvas or Instructure. For educational purposes only.</em></p>
+</div>
+
+</body>
+</html>
