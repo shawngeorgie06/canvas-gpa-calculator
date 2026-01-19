@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Canvas Grade & GPA Calculator",
+  "version": "1.0.0",
+  "description": "Calculate your GPA from Canvas LMS with auto-sync, semester tracking, and grade impact analysis. Supports multiple grading scales for any college.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "alarms",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://*.instructure.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.instructure.com/*"],
+      "js": ["content.js"],
+      "css": ["ui/styles.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Canvas GPA Calculator"
+  }
+}

@@ -1,0 +1,1484 @@
+/* Canvas Grade & GPA Calculator - Popup Styles */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1f2937;
+  background: #f9fafb;
+  width: 400px;
+  min-height: 500px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.container {
+  padding: 16px;
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.icon-btn:hover {
+  background: #e5e7eb;
+}
+
+.refresh-icon {
+  font-size: 18px;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  background: #e5e7eb;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: #374151;
+}
+
+.tab.active {
+  background: white;
+  color: #111827;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Tab Content */
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Status Banner */
+.status-banner {
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  display: none;
+}
+
+.status-banner.success {
+  display: block;
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.status-banner.error {
+  display: block;
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.status-banner.warning {
+  display: block;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.status-banner.info {
+  display: block;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+/* Last Sync Info */
+.last-sync-info {
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.last-sync-info .sync-time {
+  font-weight: 500;
+}
+
+.last-sync-info .auto-sync-badge {
+  display: inline-block;
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  margin-left: 6px;
+}
+
+/* Semester Filter */
+.semester-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.semester-filter label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.semester-filter select {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.semester-filter select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* GPA Summary Cards */
+.gpa-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.gpa-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.gpa-card.primary {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+}
+
+.gpa-card.secondary {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: white;
+}
+
+.gpa-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.9;
+  margin-bottom: 4px;
+}
+
+.gpa-value {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.gpa-value.clickable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+.gpa-value.clickable:hover {
+  opacity: 0.9;
+}
+
+.gpa-credits {
+  display: block;
+  font-size: 12px;
+  opacity: 0.8;
+  margin-top: 4px;
+}
+
+.gpa-credits.clickable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+.gpa-credits.clickable:hover {
+  opacity: 1;
+}
+
+/* Academic Standing Card */
+.standing-card {
+  background: white;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.standing-icon {
+  font-size: 24px;
+}
+
+.standing-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.standing-card.deans-list {
+  border-left: 4px solid #10b981;
+}
+
+.standing-card.good-standing {
+  border-left: 4px solid #3b82f6;
+}
+
+.standing-card.probation {
+  border-left: 4px solid #ef4444;
+}
+
+/* Sections */
+.target-section,
+.impact-section,
+.settings-section {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.target-section h3,
+.impact-section h3,
+.settings-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #111827;
+}
+
+.help-text {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 12px;
+}
+
+/* Input Groups */
+.input-group {
+  margin-bottom: 12px;
+}
+
+.input-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  color: #374151;
+}
+
+.input-group input,
+.input-group select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input-group input:focus,
+.input-group select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input-group small {
+  display: block;
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.input-group small a {
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.input-group small a:hover {
+  text-decoration: underline;
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.target-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.target-input-group label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.target-input-group input {
+  width: 80px;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+/* Buttons */
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #2563eb;
+}
+
+.btn-secondary {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.btn-secondary:hover {
+  background: #d1d5db;
+}
+
+.btn-danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.btn-danger:hover {
+  background: #fecaca;
+}
+
+/* Target Result */
+.target-result {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f0fdf4;
+  border-radius: 8px;
+  border: 1px solid #bbf7d0;
+}
+
+.target-result.warning {
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+
+.target-result.error {
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+
+/* Impact List */
+.impact-list {
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.impact-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.impact-item:last-child {
+  border-bottom: none;
+}
+
+.impact-course {
+  font-size: 13px;
+  color: #374151;
+}
+
+.impact-change {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.impact-change.positive {
+  color: #059669;
+}
+
+.impact-change.negative {
+  color: #dc2626;
+}
+
+/* Courses List */
+.courses-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.course-card {
+  background: white;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.course-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.course-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.course-credits {
+  font-size: 12px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.course-grade {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.grade-percentage {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.grade-letter {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.grade-letter.a {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.grade-letter.b {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.grade-letter.c {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.grade-letter.d {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.grade-letter.f {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.grade-letter.n,
+.grade-letter.na {
+  background: #f3f4f6;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.na-text {
+  font-style: italic;
+  color: #9ca3af;
+}
+
+.grade-points {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.grade-percentage-small {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-left: auto;
+}
+
+.course-scale {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.scale-source {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.scale-source.api {
+  color: #059669;
+}
+
+.scale-source.default {
+  color: #d97706;
+}
+
+.scale-source.manual {
+  color: #3b82f6;
+}
+
+.scale-confidence {
+  color: #9ca3af;
+}
+
+.scale-edit-btn {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.scale-edit-btn:hover {
+  background: #f3f4f6;
+}
+
+/* Course Source Badges */
+.course-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f3f4f6;
+  font-size: 12px;
+}
+
+.transcript-badge,
+.calculated-badge,
+.custom-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.transcript-badge {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.calculated-badge {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.custom-badge {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.edit-grade-btn {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.edit-grade-btn:hover {
+  background: #f3f4f6;
+}
+
+/* Small button variant */
+.btn-small {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+/* Manual course badge */
+.manual-course {
+  border-left: 3px solid #8b5cf6;
+}
+
+.manual-badge {
+  background: #ede9fe;
+  color: #6d28d9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/* Delete button for manual courses */
+.delete-course-btn {
+  background: #fee2e2;
+  color: #991b1b;
+  border: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.delete-course-btn:hover {
+  background: #fecaca;
+}
+
+/* Needs review indicator */
+.needs-review {
+  border-left: 3px solid #f59e0b;
+}
+
+.review-warning {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  margin: 8px 0;
+}
+
+/* Test Result */
+.test-result {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  display: none;
+}
+
+.test-result.success {
+  display: block;
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.test-result.error {
+  display: block;
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Help Content */
+.help-content {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f3f4f6;
+  border-radius: 8px;
+}
+
+.help-content h4 {
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.help-content ol {
+  padding-left: 20px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.help-content li {
+  margin-bottom: 6px;
+}
+
+.help-content .warning {
+  margin-top: 12px;
+  padding: 10px;
+  background: #fef3c7;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #92400e;
+}
+
+/* Placeholder */
+.placeholder {
+  text-align: center;
+  color: #9ca3af;
+  padding: 24px;
+  font-size: 13px;
+}
+
+/* Disclaimer */
+.disclaimer {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f3f4f6;
+  border-radius: 8px;
+  font-size: 11px;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* Courses Tab GPA Summary */
+.courses-gpa-summary {
+  margin-bottom: 16px;
+}
+
+.courses-gpa-card {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.courses-gpa-label {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.courses-gpa-value {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.courses-credits-value {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.courses-credits-value.clickable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+.courses-credits-value.clickable:hover {
+  opacity: 1;
+}
+
+/* Cumulative credits clickable styling */
+#totalCredits.clickable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+#totalCredits.clickable:hover {
+  opacity: 1;
+}
+
+/* Upcoming/Excluded course styling */
+.course-card.upcoming {
+  opacity: 0.6;
+  border-left: 3px solid #9ca3af;
+}
+
+.upcoming-badge {
+  background: #f3f4f6;
+  color: #6b7280;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.exclude-toggle,
+.exclude-course-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.exclude-toggle:hover,
+.exclude-course-btn:hover {
+  background: #f3f4f6;
+}
+
+.exclude-toggle.excluded,
+.exclude-course-btn.excluded {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+/* Course card when excluded from GPA */
+.course-card.excluded-from-gpa {
+  opacity: 0.5;
+  border-left: 3px solid #ef4444;
+}
+
+/* GPA Calculation Breakdown */
+.gpa-breakdown {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-size: 11px;
+  color: #475569;
+}
+
+.gpa-breakdown-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #334155;
+}
+
+.gpa-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  border-bottom: 1px dotted #e2e8f0;
+}
+
+.gpa-breakdown-row:last-child {
+  border-bottom: none;
+}
+
+.gpa-breakdown-total {
+  font-weight: 600;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #cbd5e1;
+}
+
+/* Hidden class */
+.hidden {
+  display: none !important;
+}
+
+/* Loading State */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* ==================== DARK MODE ==================== */
+body.dark-mode {
+  background: #1f2937;
+  color: #e5e7eb;
+}
+
+.dark-mode .container {
+  background: #1f2937;
+}
+
+.dark-mode .header {
+  border-bottom-color: #374151;
+}
+
+.dark-mode .header h1 {
+  color: #f9fafb;
+}
+
+.dark-mode .icon-btn:hover {
+  background: #374151;
+}
+
+.dark-mode .tabs {
+  background: #374151;
+}
+
+.dark-mode .tab {
+  color: #9ca3af;
+}
+
+.dark-mode .tab:hover {
+  color: #d1d5db;
+}
+
+.dark-mode .tab.active {
+  background: #4b5563;
+  color: #f9fafb;
+}
+
+/* Dark mode status banners */
+.dark-mode .status-banner.success {
+  background: #064e3b;
+  color: #a7f3d0;
+  border-color: #065f46;
+}
+
+.dark-mode .status-banner.error {
+  background: #7f1d1d;
+  color: #fecaca;
+  border-color: #991b1b;
+}
+
+.dark-mode .status-banner.warning {
+  background: #78350f;
+  color: #fde68a;
+  border-color: #92400e;
+}
+
+.dark-mode .status-banner.info {
+  background: #1e3a5f;
+  color: #bfdbfe;
+  border-color: #1e40af;
+}
+
+.dark-mode .last-sync-info {
+  color: #9ca3af;
+}
+
+.dark-mode .last-sync-info .auto-sync-badge {
+  background: #1e3a5f;
+  color: #93c5fd;
+}
+
+/* Dark mode semester filter */
+.dark-mode .semester-filter {
+  background: #374151;
+  box-shadow: none;
+}
+
+.dark-mode .semester-filter label {
+  color: #d1d5db;
+}
+
+.dark-mode .semester-filter select {
+  background: #4b5563;
+  color: #f9fafb;
+  border-color: #6b7280;
+}
+
+/* Dark mode GPA cards */
+.dark-mode .gpa-card {
+  box-shadow: none;
+}
+
+.dark-mode .gpa-card.primary {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+}
+
+.dark-mode .gpa-card.secondary {
+  background: linear-gradient(135deg, #065f46, #047857);
+}
+
+.dark-mode .courses-gpa-card {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  box-shadow: none;
+}
+
+/* Dark mode standing card */
+.dark-mode .standing-card {
+  background: #374151;
+}
+
+.dark-mode .standing-card.good-standing {
+  background: #064e3b;
+}
+
+.dark-mode .standing-card.deans-list {
+  background: #312e81;
+}
+
+.dark-mode .standing-card.probation {
+  background: #7f1d1d;
+}
+
+/* Dark mode course cards */
+.dark-mode .course-card {
+  background: #374151;
+  box-shadow: none;
+}
+
+.dark-mode .course-name {
+  color: #f9fafb;
+}
+
+.dark-mode .course-credits {
+  color: #9ca3af;
+}
+
+.dark-mode .grade-points {
+  color: #9ca3af;
+}
+
+.dark-mode .course-source {
+  border-top-color: #4b5563;
+}
+
+/* Dark mode grade letters */
+.dark-mode .grade-letter.a {
+  background: #064e3b;
+  color: #a7f3d0;
+}
+
+.dark-mode .grade-letter.b {
+  background: #1e3a5f;
+  color: #93c5fd;
+}
+
+.dark-mode .grade-letter.c {
+  background: #78350f;
+  color: #fde68a;
+}
+
+.dark-mode .grade-letter.d {
+  background: #7c2d12;
+  color: #fed7aa;
+}
+
+.dark-mode .grade-letter.f {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.dark-mode .grade-letter.n,
+.dark-mode .grade-letter.na {
+  background: #4b5563;
+  color: #9ca3af;
+}
+
+/* Dark mode badges */
+.dark-mode .transcript-badge {
+  background: #1e3a5f;
+  color: #93c5fd;
+}
+
+.dark-mode .calculated-badge {
+  background: #4b5563;
+  color: #d1d5db;
+}
+
+.dark-mode .custom-badge {
+  background: #064e3b;
+  color: #a7f3d0;
+}
+
+.dark-mode .manual-badge {
+  background: #4c1d95;
+  color: #c4b5fd;
+}
+
+.dark-mode .upcoming-badge {
+  background: #4b5563;
+  color: #9ca3af;
+}
+
+/* Dark mode buttons */
+.dark-mode .btn-primary {
+  background: #2563eb;
+}
+
+.dark-mode .btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.dark-mode .btn-secondary {
+  background: #4b5563;
+  color: #f9fafb;
+  border-color: #6b7280;
+}
+
+.dark-mode .btn-secondary:hover {
+  background: #6b7280;
+}
+
+.dark-mode .edit-grade-btn,
+.dark-mode .exclude-course-btn,
+.dark-mode .scale-edit-btn {
+  background: #4b5563;
+  color: #d1d5db;
+  border-color: #6b7280;
+}
+
+.dark-mode .edit-grade-btn:hover,
+.dark-mode .exclude-course-btn:hover,
+.dark-mode .scale-edit-btn:hover {
+  background: #6b7280;
+}
+
+.dark-mode .exclude-course-btn.excluded {
+  background: #7f1d1d;
+  border-color: #991b1b;
+  color: #fecaca;
+}
+
+.dark-mode .delete-course-btn {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.dark-mode .delete-course-btn:hover {
+  background: #991b1b;
+}
+
+/* Dark mode inputs */
+.dark-mode input,
+.dark-mode select {
+  background: #4b5563;
+  color: #f9fafb;
+  border-color: #6b7280;
+}
+
+.dark-mode input::placeholder {
+  color: #9ca3af;
+}
+
+.dark-mode input:focus,
+.dark-mode select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* Dark mode settings */
+.dark-mode .settings-section {
+  background: #374151;
+}
+
+.dark-mode .settings-section h3 {
+  color: #f9fafb;
+}
+
+.dark-mode .input-group label {
+  color: #d1d5db;
+}
+
+.dark-mode .input-group small {
+  color: #9ca3af;
+}
+
+.dark-mode .input-group small a {
+  color: #60a5fa;
+}
+
+/* Dark mode GPA breakdown */
+.dark-mode .gpa-breakdown {
+  background: #374151;
+  border-color: #4b5563;
+  color: #d1d5db;
+}
+
+.dark-mode .gpa-breakdown-title {
+  color: #f9fafb;
+}
+
+.dark-mode .gpa-breakdown-row {
+  border-bottom-color: #4b5563;
+}
+
+.dark-mode .gpa-breakdown-total {
+  border-top-color: #6b7280;
+}
+
+/* Dark mode target section */
+.dark-mode .target-section,
+.dark-mode .impact-section {
+  background: #374151;
+}
+
+.dark-mode .target-section h3,
+.dark-mode .impact-section h3 {
+  color: #f9fafb;
+}
+
+.dark-mode .help-text {
+  color: #9ca3af;
+}
+
+.dark-mode .target-result {
+  background: #4b5563;
+  color: #d1d5db;
+}
+
+.dark-mode .target-result.warning {
+  background: #78350f;
+  color: #fde68a;
+}
+
+.dark-mode .target-result.error {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+/* Dark mode impact list */
+.dark-mode .impact-item {
+  background: #4b5563;
+}
+
+.dark-mode .impact-course {
+  color: #f9fafb;
+}
+
+/* Dark mode help content */
+.dark-mode .help-content {
+  background: #4b5563;
+}
+
+.dark-mode .help-content h4 {
+  color: #f9fafb;
+}
+
+.dark-mode .help-content ol {
+  color: #d1d5db;
+}
+
+.dark-mode .help-content .warning {
+  background: #78350f;
+  color: #fde68a;
+}
+
+/* Dark mode test result */
+.dark-mode .test-result.success {
+  background: #064e3b;
+  color: #a7f3d0;
+}
+
+.dark-mode .test-result.error {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+/* Dark mode disclaimer */
+.dark-mode .disclaimer {
+  background: #374151;
+  color: #9ca3af;
+}
+
+/* Dark mode placeholder */
+.dark-mode .placeholder {
+  color: #6b7280;
+}
+
+/* Dark mode review warning */
+.dark-mode .review-warning {
+  background: #78350f;
+  color: #fde68a;
+}
+
+/* Dark mode scrollbar */
+.dark-mode::-webkit-scrollbar-track {
+  background: #374151;
+}
+
+.dark-mode::-webkit-scrollbar-thumb {
+  background: #6b7280;
+}
+
+.dark-mode::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Grading Scale Editor */
+.custom-scale-editor {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f3f4f6;
+  border-radius: 8px;
+}
+
+.custom-scale-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.custom-scale-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.custom-scale-item label {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 24px;
+}
+
+.custom-scale-item input {
+  width: 60px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.scale-preview {
+  margin-top: 12px;
+  padding: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.scale-preview-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #334155;
+}
+
+.scale-preview-grades {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.scale-preview-item {
+  background: #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* Dark mode grading scale */
+.dark-mode .custom-scale-editor {
+  background: #4b5563;
+}
+
+.dark-mode .scale-preview {
+  background: #374151;
+  border-color: #4b5563;
+  color: #9ca3af;
+}
+
+.dark-mode .scale-preview-title {
+  color: #f9fafb;
+}
+
+.dark-mode .scale-preview-item {
+  background: #4b5563;
+  color: #d1d5db;
+}
