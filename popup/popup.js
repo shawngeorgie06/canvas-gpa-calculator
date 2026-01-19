@@ -699,8 +699,13 @@ function estimateCreditHours(course) {
 function normalizeSemesterName(term) {
   if (!term) return 'Unknown Term';
 
+  // Handle term as object (Canvas returns { name: "Fall 2024", ... })
+  let termStr = typeof term === 'object' ? (term.name || 'Unknown Term') : term;
+
+  if (typeof termStr !== 'string') return 'Unknown Term';
+
   // Trim whitespace
-  let normalized = term.trim();
+  let normalized = termStr.trim();
 
   // Standardize format: "Fall 2024", "Spring 2025", etc.
   const match = normalized.match(/(Spring|Summer|Fall|Winter)\s*'?(\d{2,4})/i);
