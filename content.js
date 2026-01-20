@@ -301,7 +301,7 @@ async function getGradingScaleForCourse(token, baseUrl, courseId) {
     scale: getDefaultScale(),
     source: 'default_fallback',
     confidence: 50,
-    warning: 'Using default scale. Please verify with syllabus.'
+    warning: 'Using NJIT default scale. Verify with your syllabus.'
   };
 }
 
@@ -327,33 +327,32 @@ function convertCanvasScheme(canvasScheme) {
 }
 
 /**
- * Get default grading scale
+ * Get default grading scale (NJIT standard)
+ * Note: NJIT doesn't use A-, B-, C-, D+, D- grades
+ * Percentages are common defaults - verify with your syllabus
  */
 function getDefaultScale() {
   return {
-    'A': { min: 93, max: 100 },
-    'A-': { min: 90, max: 92.99 },
-    'B+': { min: 87, max: 89.99 },
-    'B': { min: 83, max: 86.99 },
-    'B-': { min: 80, max: 82.99 },
-    'C+': { min: 77, max: 79.99 },
-    'C': { min: 73, max: 76.99 },
-    'C-': { min: 70, max: 72.99 },
-    'D+': { min: 67, max: 69.99 },
-    'D': { min: 63, max: 66.99 },
-    'D-': { min: 60, max: 62.99 },
+    'A': { min: 90, max: 100 },
+    'B+': { min: 85, max: 89.99 },
+    'B': { min: 80, max: 84.99 },
+    'C+': { min: 75, max: 79.99 },
+    'C': { min: 70, max: 74.99 },
+    'D': { min: 60, max: 69.99 },
     'F': { min: 0, max: 59.99 }
   };
 }
 
 /**
- * GPA points mapping
+ * GPA points mapping (NJIT official scale)
  */
 const GRADE_POINTS = {
-  'A+': 4.0, 'A': 4.0, 'A-': 3.7,
-  'B+': 3.3, 'B': 3.0, 'B-': 2.7,
-  'C+': 2.3, 'C': 2.0, 'C-': 1.7,
-  'D+': 1.3, 'D': 1.0, 'D-': 0.7,
+  'A': 4.0,
+  'B+': 3.5,
+  'B': 3.0,
+  'C+': 2.5,
+  'C': 2.0,
+  'D': 1.0,
   'F': 0.0
 };
 
@@ -535,10 +534,11 @@ function renderWidget(courseData, gradeResult, gradeInfo, gradingScale) {
       <div class="cgpa-target-inputs">
         <span>To get</span>
         <select class="cgpa-target-grade">
-          <option value="A">A (93%+)</option>
-          <option value="A-">A- (90%+)</option>
-          <option value="B+">B+ (87%+)</option>
-          <option value="B">B (83%+)</option>
+          <option value="A">A (90%+)</option>
+          <option value="B+">B+ (85%+)</option>
+          <option value="B">B (80%+)</option>
+          <option value="C+">C+ (75%+)</option>
+          <option value="C">C (70%+)</option>
         </select>
         <button class="cgpa-target-calc-btn">Calculate</button>
       </div>
@@ -599,39 +599,133 @@ function setupWidgetEventListeners() {
 }
 
 /**
- * Open grading scale editor
+ * Open grading scale editor modal
  */
 async function openScaleEditor() {
   const scale = ContentState.gradingScale?.scale || getDefaultScale();
 
-  const scaleStr = Object.entries(scale)
-    .sort((a, b) => b[1].min - a[1].min)
-    .map(([letter, range]) => `${letter}: ${range.min}-${range.max}`)
-    .join('\n');
+  // Remove existing modal if any
+  const existingModal = document.getElementById('cgpa-scale-modal');
+  if (existingModal) existingModal.remove();
 
-  const newScaleStr = prompt(
-    `Edit Grading Scale\n\nFormat: A: 93-100\n\nCurrent scale:\n${scaleStr}`,
-    scaleStr
-  );
+  // Create modal overlay
+  const modal = document.createElement('div');
+  modal.id = 'cgpa-scale-modal';
+  modal.className = 'cgpa-modal-overlay';
 
-  if (newScaleStr && newScaleStr !== scaleStr) {
-    const newScale = parseScaleString(newScaleStr);
+  // Get current values sorted by grade
+  const grades = ['A', 'B+', 'B', 'C+', 'C', 'D', 'F'];
 
-    if (Object.keys(newScale).length > 0) {
-      // Save to storage
-      const { customGradingScales = {} } = await getStoredData(['customGradingScales']);
-      customGradingScales[ContentState.courseId] = {
-        scale: newScale,
-        lastUpdated: new Date().toISOString()
+  modal.innerHTML = `
+    <div class="cgpa-modal">
+      <div class="cgpa-modal-header">
+        <h3>Edit Grading Scale</h3>
+        <button class="cgpa-modal-close">&times;</button>
+      </div>
+      <div class="cgpa-modal-body">
+        <p class="cgpa-modal-hint">Enter the minimum percentage for each letter grade based on your syllabus.</p>
+        <div class="cgpa-scale-inputs">
+          ${grades.map(grade => {
+            const currentMin = scale[grade]?.min ?? '';
+            return `
+              <div class="cgpa-scale-row">
+                <label class="cgpa-scale-label">${grade}</label>
+                <input type="number"
+                       class="cgpa-scale-input"
+                       data-grade="${grade}"
+                       value="${currentMin}"
+                       min="0"
+                       max="100"
+                       step="0.1"
+                       placeholder="Min %">
+                <span class="cgpa-scale-percent">%</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="cgpa-modal-presets">
+          <span>Presets:</span>
+          <button class="cgpa-preset-btn" data-preset="njit">NJIT Default</button>
+          <button class="cgpa-preset-btn" data-preset="standard">Standard (93/85/80...)</button>
+        </div>
+      </div>
+      <div class="cgpa-modal-footer">
+        <button class="cgpa-modal-cancel">Cancel</button>
+        <button class="cgpa-modal-save">Save Scale</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Event listeners
+  modal.querySelector('.cgpa-modal-close').addEventListener('click', () => modal.remove());
+  modal.querySelector('.cgpa-modal-cancel').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
+  });
+
+  // Preset buttons
+  modal.querySelectorAll('.cgpa-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const preset = btn.dataset.preset;
+      const presetScales = {
+        njit: { 'A': 90, 'B+': 85, 'B': 80, 'C+': 75, 'C': 70, 'D': 60, 'F': 0 },
+        standard: { 'A': 93, 'B+': 87, 'B': 83, 'C+': 77, 'C': 73, 'D': 65, 'F': 0 }
       };
-      await saveToStorage({ customGradingScales });
+      const values = presetScales[preset];
+      if (values) {
+        modal.querySelectorAll('.cgpa-scale-input').forEach(input => {
+          const grade = input.dataset.grade;
+          if (values[grade] !== undefined) {
+            input.value = values[grade];
+          }
+        });
+      }
+    });
+  });
 
-      // Refresh
-      await loadAndDisplayCourseData(true);
-    } else {
-      alert('Could not parse grading scale. Please use format: A: 93-100');
+  // Save button
+  modal.querySelector('.cgpa-modal-save').addEventListener('click', async () => {
+    const newScale = {};
+    const inputs = modal.querySelectorAll('.cgpa-scale-input');
+
+    // Collect values
+    const values = [];
+    inputs.forEach(input => {
+      const grade = input.dataset.grade;
+      const min = parseFloat(input.value);
+      if (!isNaN(min)) {
+        values.push({ grade, min });
+      }
+    });
+
+    // Sort by min descending and calculate max values
+    values.sort((a, b) => b.min - a.min);
+
+    for (let i = 0; i < values.length; i++) {
+      const { grade, min } = values[i];
+      const max = i === 0 ? 100 : values[i - 1].min - 0.01;
+      newScale[grade] = { min, max: Math.round(max * 100) / 100 };
     }
-  }
+
+    if (Object.keys(newScale).length === 0) {
+      alert('Please enter at least one grade value.');
+      return;
+    }
+
+    // Save to storage
+    const { customGradingScales = {} } = await getStoredData(['customGradingScales']);
+    customGradingScales[ContentState.courseId] = {
+      scale: newScale,
+      lastUpdated: new Date().toISOString()
+    };
+    await saveToStorage({ customGradingScales });
+
+    // Close modal and refresh
+    modal.remove();
+    await loadAndDisplayCourseData(true);
+  });
 }
 
 /**
