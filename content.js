@@ -246,11 +246,11 @@ function createWidgetElement() {
   widget.className = 'canvas-gpa-widget';
   widget.innerHTML = `
     <div class="cgpa-header">
-      <h3 class="cgpa-title">Grade Calculator<span class="cgpa-shortcut-hint">Ctrl+Shift+G</span></h3>
+      <h3 class="cgpa-title">Grade Calculator</h3>
       <div class="cgpa-header-buttons">
         <button class="cgpa-minimize-btn" title="Minimize">−</button>
         <button class="cgpa-refresh-btn" title="Refresh">↻</button>
-        <button class="cgpa-close-btn cgpa-minimize-btn" title="Hide widget">×</button>
+        <button class="cgpa-close-btn cgpa-minimize-btn" title="Hide (Ctrl+Shift+G)">×</button>
       </div>
     </div>
     <div class="cgpa-content">
