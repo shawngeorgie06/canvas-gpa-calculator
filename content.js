@@ -8,8 +8,13 @@ const ContentState = {
   courseId: null,
   courseData: null,
   gradingScale: null,
+  excludedAssignments: [],
   isInitialized: false,
-  widgetContainer: null
+  widgetContainer: null,
+  toggleButton: null,
+  assignmentListExpanded: false,
+  widgetVisible: true,
+  widgetMinimized: false
 };
 
 // Initialize when DOM is ready
@@ -102,6 +107,91 @@ function saveToStorage(data) {
 }
 
 /**
+ * Create the floating toggle button
+ */
+function createToggleButton() {
+  const button = document.createElement('button');
+  button.id = 'cgpa-toggle-btn';
+  button.className = 'cgpa-toggle-btn';
+  button.setAttribute('data-tooltip', 'Show Grade Calculator (Ctrl+Shift+G)');
+  button.innerHTML = '<span class="cgpa-toggle-icon">📊</span>';
+
+  button.addEventListener('click', async () => {
+    await toggleWidgetVisible();
+  });
+
+  document.body.appendChild(button);
+  ContentState.toggleButton = button;
+
+  return button;
+}
+
+/**
+ * Set widget visibility
+ * @param {boolean} visible - Whether widget should be visible
+ */
+async function setWidgetVisible(visible) {
+  ContentState.widgetVisible = visible;
+  await saveToStorage({ widgetVisible: visible });
+
+  if (ContentState.widgetContainer) {
+    ContentState.widgetContainer.classList.toggle('hidden', !visible);
+  }
+
+  if (ContentState.toggleButton) {
+    ContentState.toggleButton.classList.toggle('widget-hidden', !visible);
+    ContentState.toggleButton.setAttribute(
+      'data-tooltip',
+      visible ? 'Hide Grade Calculator (Ctrl+Shift+G)' : 'Show Grade Calculator (Ctrl+Shift+G)'
+    );
+  }
+}
+
+/**
+ * Toggle widget visibility
+ */
+async function toggleWidgetVisible() {
+  const newState = !ContentState.widgetVisible;
+  await setWidgetVisible(newState);
+
+  // If showing and not yet loaded, load data
+  if (newState && !ContentState.courseData) {
+    await loadAndDisplayCourseData();
+  }
+}
+
+/**
+ * Toggle widget minimized state
+ */
+function toggleWidgetMinimized() {
+  ContentState.widgetMinimized = !ContentState.widgetMinimized;
+
+  if (ContentState.widgetContainer) {
+    ContentState.widgetContainer.classList.toggle('minimized', ContentState.widgetMinimized);
+
+    // Update minimize button icon
+    const minBtn = ContentState.widgetContainer.querySelector('.cgpa-minimize-btn:not(.cgpa-close-btn)');
+    if (minBtn) {
+      minBtn.innerHTML = ContentState.widgetMinimized ? '+' : '−';
+      minBtn.title = ContentState.widgetMinimized ? 'Expand' : 'Minimize';
+    }
+  }
+}
+
+/**
+ * Setup keyboard shortcuts
+ */
+function setupKeyboardShortcuts() {
+  document.addEventListener('keydown', async (e) => {
+    // Ctrl+Shift+G to toggle widget
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'g') {
+      e.preventDefault();
+      await toggleWidgetVisible();
+    }
+  });
+}
+
+/**
  * Inject the grade widget into the page
  */
 async function injectGradeWidget() {
@@ -115,15 +205,36 @@ async function injectGradeWidget() {
     return;
   }
 
+  // Load visibility preference
+  const { widgetVisible } = await getStoredData(['widgetVisible']);
+  ContentState.widgetVisible = widgetVisible !== false; // Default to true
+
   // Create widget container
   const widget = createWidgetElement();
   ContentState.widgetContainer = widget;
 
+  // Apply initial visibility state
+  if (!ContentState.widgetVisible) {
+    widget.classList.add('hidden');
+  }
+
   // Insert at top of sidebar
   sidebar.insertBefore(widget, sidebar.firstChild);
 
-  // Load and display data
-  await loadAndDisplayCourseData();
+  // Create floating toggle button
+  createToggleButton();
+  if (!ContentState.widgetVisible) {
+    ContentState.toggleButton.classList.add('widget-hidden');
+    ContentState.toggleButton.setAttribute('data-tooltip', 'Show Grade Calculator (Ctrl+Shift+G)');
+  }
+
+  // Setup keyboard shortcuts
+  setupKeyboardShortcuts();
+
+  // Load and display data only if widget is visible
+  if (ContentState.widgetVisible) {
+    await loadAndDisplayCourseData();
+  }
 }
 
 /**
@@ -135,8 +246,12 @@ function createWidgetElement() {
   widget.className = 'canvas-gpa-widget';
   widget.innerHTML = `
     <div class="cgpa-header">
-      <h3 class="cgpa-title">Grade Calculator</h3>
-      <button class="cgpa-refresh-btn" title="Refresh">↻</button>
+      <h3 class="cgpa-title">Grade Calculator<span class="cgpa-shortcut-hint">Ctrl+Shift+G</span></h3>
+      <div class="cgpa-header-buttons">
+        <button class="cgpa-minimize-btn" title="Minimize">−</button>
+        <button class="cgpa-refresh-btn" title="Refresh">↻</button>
+        <button class="cgpa-close-btn cgpa-minimize-btn" title="Hide widget">×</button>
+      </div>
     </div>
     <div class="cgpa-content">
       <div class="cgpa-loading">Loading...</div>
@@ -146,6 +261,16 @@ function createWidgetElement() {
   // Add refresh handler
   widget.querySelector('.cgpa-refresh-btn').addEventListener('click', async () => {
     await loadAndDisplayCourseData(true);
+  });
+
+  // Add minimize handler
+  widget.querySelector('.cgpa-minimize-btn').addEventListener('click', () => {
+    toggleWidgetMinimized();
+  });
+
+  // Add close/hide handler
+  widget.querySelector('.cgpa-close-btn').addEventListener('click', async () => {
+    await setWidgetVisible(false);
   });
 
   return widget;
@@ -183,8 +308,12 @@ async function loadAndDisplayCourseData(forceRefresh = false) {
     );
     ContentState.gradingScale = gradingScale;
 
-    // Calculate grade
-    const gradeResult = calculateGradeFromData(courseData);
+    // Load excluded assignments
+    const { excludedAssignments = {} } = await getStoredData(['excludedAssignments']);
+    ContentState.excludedAssignments = excludedAssignments[ContentState.courseId] || [];
+
+    // Calculate grade (with exclusions applied)
+    const gradeResult = calculateGradeFromData(courseData, ContentState.excludedAssignments);
 
     // Get grade info using course-specific scale
     const gradeInfo = convertGradeWithScale(gradeResult.percentage, gradingScale);
@@ -358,34 +487,31 @@ const GRADE_POINTS = {
 
 /**
  * Calculate grade from assignment data
+ * @param {object} courseData - Course data with assignment groups
+ * @param {array} excludedAssignments - Array of assignment IDs to exclude
  */
-function calculateGradeFromData(courseData) {
-  const { assignmentGroups, currentGrade } = courseData;
+function calculateGradeFromData(courseData, excludedAssignments = []) {
+  const { assignmentGroups } = courseData;
 
-  // If Canvas provides current grade, use it
-  if (currentGrade !== null && currentGrade !== undefined) {
-    return {
-      percentage: currentGrade,
-      method: 'canvas_provided',
-      isComplete: true
-    };
-  }
-
-  // Calculate manually
+  // Always calculate manually when we have exclusions to respect
+  // (Canvas-provided grade doesn't account for user exclusions)
   const totalWeight = assignmentGroups.reduce((sum, g) => sum + (g.group_weight || 0), 0);
   const isWeighted = totalWeight > 0;
 
   if (isWeighted) {
-    return calculateWeightedGrade(assignmentGroups);
+    return calculateWeightedGrade(assignmentGroups, excludedAssignments);
   } else {
-    return calculatePointsGrade(assignmentGroups);
+    return calculatePointsGrade(assignmentGroups, excludedAssignments);
   }
 }
 
 /**
  * Calculate weighted grade
+ * @param {array} groups - Assignment groups
+ * @param {array} excludedAssignments - Array of assignment IDs to exclude
  */
-function calculateWeightedGrade(groups) {
+function calculateWeightedGrade(groups, excludedAssignments = []) {
+  const excludedSet = new Set(excludedAssignments.map(id => id.toString()));
   let totalWeightedScore = 0;
   let totalWeight = 0;
   const breakdown = [];
@@ -394,12 +520,18 @@ function calculateWeightedGrade(groups) {
     const weight = group.group_weight || 0;
     let earned = 0;
     let possible = 0;
+    let gradedCount = 0;
 
     for (const assignment of group.assignments || []) {
+      // Skip excluded assignments
+      if (excludedSet.has(assignment.id.toString())) {
+        continue;
+      }
       const submission = assignment.submission;
       if (submission?.score !== null && submission?.score !== undefined && !submission.excused) {
         earned += submission.score;
         possible += assignment.points_possible || 0;
+        gradedCount++;
       }
     }
 
@@ -410,10 +542,23 @@ function calculateWeightedGrade(groups) {
 
       breakdown.push({
         name: group.name,
+        id: group.id,
         weight,
         percentage: groupPercent,
         earned,
-        possible
+        possible,
+        gradedCount
+      });
+    } else if (weight > 0) {
+      // Track groups with no grades yet
+      breakdown.push({
+        name: group.name,
+        id: group.id,
+        weight,
+        percentage: null,
+        earned: 0,
+        possible: 0,
+        gradedCount: 0
       });
     }
   }
@@ -430,19 +575,45 @@ function calculateWeightedGrade(groups) {
 
 /**
  * Calculate points-based grade
+ * @param {array} groups - Assignment groups
+ * @param {array} excludedAssignments - Array of assignment IDs to exclude
  */
-function calculatePointsGrade(groups) {
+function calculatePointsGrade(groups, excludedAssignments = []) {
+  const excludedSet = new Set(excludedAssignments.map(id => id.toString()));
   let totalEarned = 0;
   let totalPossible = 0;
+  const breakdown = [];
 
   for (const group of groups) {
+    let groupEarned = 0;
+    let groupPossible = 0;
+    let gradedCount = 0;
+
     for (const assignment of group.assignments || []) {
+      // Skip excluded assignments
+      if (excludedSet.has(assignment.id.toString())) {
+        continue;
+      }
       const submission = assignment.submission;
       if (submission?.score !== null && submission?.score !== undefined && !submission.excused) {
-        totalEarned += submission.score;
-        totalPossible += assignment.points_possible || 0;
+        groupEarned += submission.score;
+        groupPossible += assignment.points_possible || 0;
+        gradedCount++;
       }
     }
+
+    totalEarned += groupEarned;
+    totalPossible += groupPossible;
+
+    breakdown.push({
+      name: group.name,
+      id: group.id,
+      weight: null,
+      percentage: groupPossible > 0 ? (groupEarned / groupPossible) * 100 : null,
+      earned: groupEarned,
+      possible: groupPossible,
+      gradedCount
+    });
   }
 
   const percentage = totalPossible > 0 ? (totalEarned / totalPossible) * 100 : null;
@@ -451,7 +622,8 @@ function calculatePointsGrade(groups) {
     percentage,
     method: 'points',
     totalEarned,
-    totalPossible
+    totalPossible,
+    breakdown
   };
 }
 
@@ -481,6 +653,204 @@ function convertGradeWithScale(percentage, gradingScale) {
 }
 
 /**
+ * Generate SVG pie chart for grade breakdown
+ * @param {array} breakdown - Array of category data with name, weight/percentage, etc.
+ * @param {number} centerPercentage - The overall percentage to show in center
+ * @returns {string} SVG markup
+ */
+function generatePieChartSVG(breakdown, centerPercentage) {
+  const size = 180;
+  const center = size / 2;
+  const radius = 55;
+  const circumference = 2 * Math.PI * radius;
+
+  // Filter to only categories with grades
+  const gradedCategories = breakdown.filter(cat => cat.percentage !== null);
+
+  if (gradedCategories.length === 0) {
+    return `
+      <svg class="cgpa-pie-svg" viewBox="0 0 ${size} ${size}">
+        <circle cx="${center}" cy="${center}" r="${radius}" fill="none" stroke="#e5e7eb" stroke-width="35"/>
+        <text x="${center}" y="${center}" text-anchor="middle" dominant-baseline="middle" transform="rotate(90 ${center} ${center})">
+          <tspan class="cgpa-pie-center-text" dy="-5">N/A</tspan>
+          <tspan class="cgpa-pie-center-label" x="${center}" dy="18">No grades</tspan>
+        </text>
+      </svg>
+    `;
+  }
+
+  // Calculate total weight or equal distribution
+  const hasWeights = gradedCategories.some(cat => cat.weight > 0);
+  let totalWeight;
+
+  if (hasWeights) {
+    totalWeight = gradedCategories.reduce((sum, cat) => sum + (cat.weight || 0), 0);
+  } else {
+    totalWeight = gradedCategories.length;
+  }
+
+  // Generate segments
+  let currentOffset = 0;
+  const segments = gradedCategories.map((cat, index) => {
+    const weight = hasWeights ? (cat.weight || 0) : 1;
+    const segmentLength = (weight / totalWeight) * circumference;
+    const dashArray = `${segmentLength} ${circumference - segmentLength}`;
+    const dashOffset = -currentOffset;
+    currentOffset += segmentLength;
+
+    return `<circle
+      class="cgpa-pie-segment cgpa-pie-color-${index % 8}"
+      cx="${center}" cy="${center}" r="${radius}"
+      stroke-dasharray="${dashArray}"
+      stroke-dashoffset="${dashOffset}"
+      data-category="${cat.name}"
+      data-percentage="${cat.percentage?.toFixed(1) || 0}%"
+    />`;
+  }).join('');
+
+  // Center text (rotated back to normal)
+  const centerText = centerPercentage !== null
+    ? `<text x="${center}" y="${center}" text-anchor="middle" dominant-baseline="middle" transform="rotate(90 ${center} ${center})">
+        <tspan class="cgpa-pie-center-text" dy="-5">${centerPercentage.toFixed(1)}%</tspan>
+        <tspan class="cgpa-pie-center-label" x="${center}" dy="18">Overall</tspan>
+      </text>`
+    : '';
+
+  return `
+    <svg class="cgpa-pie-svg" viewBox="0 0 ${size} ${size}">
+      ${segments}
+      ${centerText}
+    </svg>
+  `;
+}
+
+/**
+ * Generate pie chart legend HTML
+ * @param {array} breakdown - Category breakdown data
+ * @returns {string} HTML markup for legend
+ */
+function generatePieChartLegend(breakdown) {
+  const gradedCategories = breakdown.filter(cat => cat.percentage !== null);
+
+  if (gradedCategories.length === 0) {
+    return '<div class="cgpa-pie-legend"><span style="color: #9ca3af; font-size: 12px;">No graded categories yet</span></div>';
+  }
+
+  const legendItems = gradedCategories.map((cat, index) => {
+    const weightText = cat.weight ? `(${cat.weight}%)` : '';
+    return `
+      <div class="cgpa-pie-legend-item">
+        <div class="cgpa-pie-legend-left">
+          <span class="cgpa-pie-legend-dot cgpa-legend-color-${index % 8}"></span>
+          <span class="cgpa-pie-legend-name" title="${cat.name}">${cat.name}</span>
+          <span class="cgpa-pie-legend-weight">${weightText}</span>
+        </div>
+        <span class="cgpa-pie-legend-percent">${cat.percentage.toFixed(0)}%</span>
+      </div>
+    `;
+  }).join('');
+
+  return `<div class="cgpa-pie-legend">${legendItems}</div>`;
+}
+
+/**
+ * Render the assignment list with exclusion toggles
+ * @param {array} assignmentGroups - Assignment groups from course data
+ * @param {array} excludedAssignments - Array of excluded assignment IDs
+ * @returns {string} HTML markup for assignment list
+ */
+function renderAssignmentList(assignmentGroups, excludedAssignments) {
+  const excludedSet = new Set(excludedAssignments.map(id => id.toString()));
+  const isExpanded = ContentState.assignmentListExpanded;
+
+  let groupsHtml = '';
+
+  for (const group of assignmentGroups) {
+    const assignments = group.assignments || [];
+    if (assignments.length === 0) continue;
+
+    const assignmentItems = assignments.map(assignment => {
+      const isExcluded = excludedSet.has(assignment.id.toString());
+      const submission = assignment.submission;
+      const hasScore = submission?.score !== null && submission?.score !== undefined;
+      const isExcused = submission?.excused;
+
+      let scoreDisplay;
+      if (isExcused) {
+        scoreDisplay = '<span class="cgpa-assignment-ungraded">Excused</span>';
+      } else if (hasScore) {
+        scoreDisplay = `<span class="cgpa-assignment-score">${submission.score}/${assignment.points_possible || 0}</span>`;
+      } else {
+        scoreDisplay = '<span class="cgpa-assignment-ungraded">--</span>';
+      }
+
+      const excludedLabel = isExcluded ? '<span class="cgpa-assignment-excluded-label">excluded</span>' : '';
+
+      return `
+        <div class="cgpa-assignment-item ${isExcluded ? 'excluded' : ''}" data-assignment-id="${assignment.id}">
+          <input type="checkbox"
+                 class="cgpa-assignment-checkbox"
+                 ${!isExcluded ? 'checked' : ''}
+                 data-assignment-id="${assignment.id}"
+                 title="${isExcluded ? 'Click to include in grade' : 'Click to exclude from grade'}">
+          <span class="cgpa-assignment-name" title="${assignment.name}">${assignment.name}</span>
+          ${excludedLabel}
+          ${scoreDisplay}
+        </div>
+      `;
+    }).join('');
+
+    groupsHtml += `
+      <div class="cgpa-assignment-group">
+        <div class="cgpa-assignment-group-name">${group.name}</div>
+        ${assignmentItems}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="cgpa-assignment-section">
+      <div class="cgpa-assignment-header">
+        <h4>Assignments</h4>
+        <span class="cgpa-assignment-toggle ${isExpanded ? 'expanded' : ''}">▼</span>
+      </div>
+      <div class="cgpa-assignment-list ${isExpanded ? 'expanded' : ''}">
+        ${groupsHtml}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Handle assignment toggle (include/exclude)
+ * @param {string} assignmentId - ID of the assignment to toggle
+ */
+async function handleAssignmentToggle(assignmentId) {
+  const { excludedAssignments = {} } = await getStoredData(['excludedAssignments']);
+  const courseExclusions = excludedAssignments[ContentState.courseId] || [];
+
+  const index = courseExclusions.indexOf(assignmentId);
+  if (index === -1) {
+    // Add to exclusions
+    courseExclusions.push(assignmentId);
+  } else {
+    // Remove from exclusions
+    courseExclusions.splice(index, 1);
+  }
+
+  excludedAssignments[ContentState.courseId] = courseExclusions;
+  await saveToStorage({ excludedAssignments });
+
+  // Update local state
+  ContentState.excludedAssignments = courseExclusions;
+
+  // Recalculate and re-render
+  const gradeResult = calculateGradeFromData(ContentState.courseData, courseExclusions);
+  const gradeInfo = convertGradeWithScale(gradeResult.percentage, ContentState.gradingScale);
+  renderWidget(ContentState.courseData, gradeResult, gradeInfo, ContentState.gradingScale);
+}
+
+/**
  * Render the widget content
  */
 function renderWidget(courseData, gradeResult, gradeInfo, gradingScale) {
@@ -498,11 +868,26 @@ function renderWidget(courseData, gradeResult, gradeInfo, gradingScale) {
   // Get letter grade class
   const letterClass = gradeInfo.letterGrade ? gradeInfo.letterGrade.charAt(0).toLowerCase() : '';
 
+  // Generate pie chart if we have breakdown data
+  const breakdown = gradeResult.breakdown || [];
+  const pieChartSVG = generatePieChartSVG(breakdown, percentage);
+  const pieChartLegend = generatePieChartLegend(breakdown);
+
+  // Generate assignment list
+  const assignmentListHtml = renderAssignmentList(courseData.assignmentGroups, ContentState.excludedAssignments);
+
   content.innerHTML = `
     <div class="cgpa-grade-display">
       <div class="cgpa-percentage">${percentage !== null ? percentage.toFixed(1) + '%' : 'N/A'}</div>
       <div class="cgpa-letter-grade ${letterClass}">${gradeInfo.letterGrade || '--'}</div>
       <div class="cgpa-gpa-points">${gradeInfo.gpaPoints !== null ? gradeInfo.gpaPoints.toFixed(1) + ' GPA pts' : ''}</div>
+    </div>
+
+    <div class="cgpa-pie-container">
+      <div class="cgpa-pie-chart">
+        ${pieChartSVG}
+      </div>
+      ${pieChartLegend}
     </div>
 
     <div class="cgpa-scale-info">
@@ -515,6 +900,8 @@ function renderWidget(courseData, gradeResult, gradeInfo, gradingScale) {
     <div class="cgpa-scale-preview">
       ${formatScalePreview(gradingScale.scale)}
     </div>
+
+    ${assignmentListHtml}
 
     <div class="cgpa-whatif-section">
       <h4>What-If Calculator</h4>
@@ -596,6 +983,32 @@ function setupWidgetEventListeners() {
 
   // Target calculator
   widget.querySelector('.cgpa-target-calc-btn')?.addEventListener('click', calculateTarget);
+
+  // Assignment list toggle
+  const assignmentHeader = widget.querySelector('.cgpa-assignment-header');
+  if (assignmentHeader) {
+    assignmentHeader.addEventListener('click', () => {
+      ContentState.assignmentListExpanded = !ContentState.assignmentListExpanded;
+      const list = widget.querySelector('.cgpa-assignment-list');
+      const toggle = widget.querySelector('.cgpa-assignment-toggle');
+      if (list) {
+        list.classList.toggle('expanded', ContentState.assignmentListExpanded);
+      }
+      if (toggle) {
+        toggle.classList.toggle('expanded', ContentState.assignmentListExpanded);
+      }
+    });
+  }
+
+  // Assignment checkboxes for exclusion
+  widget.querySelectorAll('.cgpa-assignment-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', async (e) => {
+      const assignmentId = e.target.dataset.assignmentId;
+      if (assignmentId) {
+        await handleAssignmentToggle(assignmentId);
+      }
+    });
+  });
 }
 
 /**
@@ -779,11 +1192,16 @@ function calculateWhatIf() {
     }
   }
 
-  // Calculate new grade
-  const newResult = calculateGradeFromData({ ...ContentState.courseData, assignmentGroups: modifiedGroups });
+  // Calculate new grade (respecting current exclusions)
+  const newResult = calculateGradeFromData(
+    { ...ContentState.courseData, assignmentGroups: modifiedGroups },
+    ContentState.excludedAssignments
+  );
   const newGradeInfo = convertGradeWithScale(newResult.percentage, ContentState.gradingScale);
 
-  const currentPct = ContentState.courseData.currentGrade || 0;
+  // Get current grade for comparison
+  const currentResult = calculateGradeFromData(ContentState.courseData, ContentState.excludedAssignments);
+  const currentPct = currentResult.percentage || 0;
   const change = newResult.percentage - currentPct;
   const changeClass = change >= 0 ? 'positive' : 'negative';
   const changeSign = change >= 0 ? '+' : '';
@@ -808,17 +1226,24 @@ function calculateTarget() {
   const scale = ContentState.gradingScale?.scale || getDefaultScale();
   const targetMin = scale[targetLetter]?.min || 90;
 
-  const currentPct = ContentState.courseData.currentGrade || 0;
+  // Get current grade (respecting exclusions)
+  const currentResult = calculateGradeFromData(ContentState.courseData, ContentState.excludedAssignments);
+  const currentPct = currentResult.percentage || 0;
 
   if (currentPct >= targetMin) {
     resultDiv.innerHTML = `<p class="cgpa-success-text">You already have ${targetLetter}!</p>`;
     return;
   }
 
-  // Find ungraded assignments
+  // Find ungraded assignments (excluding excluded ones)
+  const excludedSet = new Set(ContentState.excludedAssignments.map(id => id.toString()));
   const ungraded = [];
   for (const group of ContentState.courseData.assignmentGroups) {
     for (const assignment of group.assignments || []) {
+      // Skip excluded assignments
+      if (excludedSet.has(assignment.id.toString())) {
+        continue;
+      }
       const submission = assignment.submission;
       if (!submission || submission.score === null || submission.score === undefined) {
         if (assignment.points_possible > 0) {

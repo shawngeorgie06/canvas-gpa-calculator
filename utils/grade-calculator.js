@@ -37,7 +37,7 @@ const GradeCalculator = {
 
     for (const group of assignmentGroups) {
       const groupWeight = group.group_weight || 0;
-      const { earnedPoints, possiblePoints, gradedCount, totalCount, droppedAssignments } =
+      const { earnedPoints, possiblePoints, gradedCount, totalCount, excludedCount, droppedAssignments } =
         this.calculateGroupScore(group, options);
 
       if (possiblePoints > 0) {
@@ -57,6 +57,7 @@ const GradeCalculator = {
           possiblePoints,
           gradedCount,
           totalCount,
+          excludedCount,
           droppedAssignments
         });
       } else if (groupWeight > 0) {
@@ -71,6 +72,7 @@ const GradeCalculator = {
           possiblePoints: 0,
           gradedCount: 0,
           totalCount: group.assignments?.length || 0,
+          excludedCount: excludedCount || 0,
           droppedAssignments: []
         });
       }
@@ -104,7 +106,7 @@ const GradeCalculator = {
     const groupBreakdown = [];
 
     for (const group of assignmentGroups) {
-      const { earnedPoints, possiblePoints, gradedCount, totalCount, droppedAssignments } =
+      const { earnedPoints, possiblePoints, gradedCount, totalCount, excludedCount, droppedAssignments } =
         this.calculateGroupScore(group, options);
 
       totalEarned += earnedPoints;
@@ -118,6 +120,7 @@ const GradeCalculator = {
         percentage: possiblePoints > 0 ? (earnedPoints / possiblePoints) * 100 : null,
         gradedCount,
         totalCount,
+        excludedCount,
         droppedAssignments
       });
     }
@@ -140,15 +143,23 @@ const GradeCalculator = {
    * Calculate score for a single assignment group
    * @param {object} group - Assignment group
    * @param {object} options - Calculation options
+   * @param {array} options.excludedAssignments - Array of assignment IDs to exclude
    * @returns {object} Group score details
    */
   calculateGroupScore(group, options = {}) {
-    const { includeUngraded = false } = options;
+    const { includeUngraded = false, excludedAssignments = [] } = options;
     const assignments = group.assignments || [];
     const rules = group.rules || {};
 
-    // Get graded assignments
+    // Create a Set for faster lookup of excluded assignments
+    const excludedSet = new Set(excludedAssignments.map(id => id.toString()));
+
+    // Get graded assignments (excluding user-excluded ones)
     let gradedAssignments = assignments.filter(a => {
+      // Skip excluded assignments
+      if (excludedSet.has(a.id.toString())) {
+        return false;
+      }
       const submission = a.submission;
       return submission &&
              submission.score !== null &&
@@ -200,11 +211,14 @@ const GradeCalculator = {
       possiblePoints += assignment.points_possible;
     }
 
-    // Include ungraded if requested
+    // Include ungraded if requested (but not excluded ones)
     if (includeUngraded) {
-      const ungradedAssignments = assignments.filter(a =>
-        !a.submission || a.submission.score === null || a.submission.score === undefined
-      );
+      const ungradedAssignments = assignments.filter(a => {
+        if (excludedSet.has(a.id.toString())) {
+          return false;
+        }
+        return !a.submission || a.submission.score === null || a.submission.score === undefined;
+      });
 
       for (const assignment of ungradedAssignments) {
         if (assignment.points_possible > 0) {
@@ -213,11 +227,15 @@ const GradeCalculator = {
       }
     }
 
+    // Count excluded assignments in this group
+    const excludedCount = assignments.filter(a => excludedSet.has(a.id.toString())).length;
+
     return {
       earnedPoints,
       possiblePoints,
       gradedCount: gradedAssignments.length,
       totalCount: assignments.length,
+      excludedCount,
       droppedAssignments
     };
   },

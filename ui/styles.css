@@ -719,3 +719,366 @@
   background: linear-gradient(135deg, #2563eb, #1e40af);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
+
+/* ===== Pie Chart Styles ===== */
+.cgpa-pie-container {
+  padding: 16px 0;
+  border-bottom: 1px solid #f3f4f6;
+  margin-bottom: 12px;
+}
+
+.cgpa-pie-chart {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.cgpa-pie-svg {
+  width: 180px;
+  height: 180px;
+  transform: rotate(-90deg);
+}
+
+.cgpa-pie-segment {
+  fill: none;
+  stroke-width: 35;
+  transition: opacity 0.2s;
+}
+
+.cgpa-pie-segment:hover {
+  opacity: 0.8;
+}
+
+.cgpa-pie-center {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.cgpa-pie-center-text {
+  font-size: 24px;
+  font-weight: 700;
+  fill: #111827;
+}
+
+.cgpa-pie-center-label {
+  font-size: 11px;
+  fill: #6b7280;
+}
+
+.cgpa-pie-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.cgpa-pie-legend-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.cgpa-pie-legend-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cgpa-pie-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cgpa-pie-legend-name {
+  color: #374151;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cgpa-pie-legend-weight {
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.cgpa-pie-legend-percent {
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Pie chart color palette */
+.cgpa-pie-color-0 { stroke: #10b981; }  /* Green */
+.cgpa-pie-color-1 { stroke: #3b82f6; }  /* Blue */
+.cgpa-pie-color-2 { stroke: #8b5cf6; }  /* Purple */
+.cgpa-pie-color-3 { stroke: #f59e0b; }  /* Amber */
+.cgpa-pie-color-4 { stroke: #ef4444; }  /* Red */
+.cgpa-pie-color-5 { stroke: #06b6d4; }  /* Cyan */
+.cgpa-pie-color-6 { stroke: #ec4899; }  /* Pink */
+.cgpa-pie-color-7 { stroke: #84cc16; }  /* Lime */
+
+.cgpa-legend-color-0 { background: #10b981; }
+.cgpa-legend-color-1 { background: #3b82f6; }
+.cgpa-legend-color-2 { background: #8b5cf6; }
+.cgpa-legend-color-3 { background: #f59e0b; }
+.cgpa-legend-color-4 { background: #ef4444; }
+.cgpa-legend-color-5 { background: #06b6d4; }
+.cgpa-legend-color-6 { background: #ec4899; }
+.cgpa-legend-color-7 { background: #84cc16; }
+
+/* ===== Assignment List Styles ===== */
+.cgpa-assignment-section {
+  border-top: 1px solid #f3f4f6;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.cgpa-assignment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px 0;
+  user-select: none;
+}
+
+.cgpa-assignment-header:hover {
+  color: #3b82f6;
+}
+
+.cgpa-assignment-header h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+}
+
+.cgpa-assignment-toggle {
+  font-size: 12px;
+  color: #9ca3af;
+  transition: transform 0.2s;
+}
+
+.cgpa-assignment-toggle.expanded {
+  transform: rotate(180deg);
+}
+
+.cgpa-assignment-list {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out;
+}
+
+.cgpa-assignment-list.expanded {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.cgpa-assignment-group {
+  margin-bottom: 12px;
+}
+
+.cgpa-assignment-group-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 0;
+  border-bottom: 1px solid #f3f4f6;
+  margin-bottom: 4px;
+}
+
+.cgpa-assignment-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 12px;
+  border-bottom: 1px solid #f9fafb;
+}
+
+.cgpa-assignment-item:last-child {
+  border-bottom: none;
+}
+
+.cgpa-assignment-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.cgpa-assignment-name {
+  flex: 1;
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cgpa-assignment-score {
+  font-weight: 500;
+  color: #111827;
+  white-space: nowrap;
+}
+
+.cgpa-assignment-item.excluded .cgpa-assignment-name {
+  color: #9ca3af;
+  text-decoration: line-through;
+}
+
+.cgpa-assignment-item.excluded .cgpa-assignment-score {
+  color: #9ca3af;
+}
+
+.cgpa-assignment-excluded-label {
+  font-size: 10px;
+  color: #f59e0b;
+  background: #fef3c7;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.cgpa-assignment-ungraded {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Scrollbar styling for assignment list */
+.cgpa-assignment-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cgpa-assignment-list::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+
+.cgpa-assignment-list::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.cgpa-assignment-list::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* ===== Widget Toggle Button ===== */
+.cgpa-toggle-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  z-index: 99998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.cgpa-toggle-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+}
+
+.cgpa-toggle-btn:active {
+  transform: scale(0.95);
+}
+
+.cgpa-toggle-btn .cgpa-toggle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s;
+}
+
+.cgpa-toggle-btn.widget-hidden .cgpa-toggle-icon {
+  transform: rotate(180deg);
+}
+
+/* Tooltip for toggle button */
+.cgpa-toggle-btn::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: 60px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #1f2937;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.cgpa-toggle-btn:hover::before {
+  opacity: 1;
+}
+
+/* Widget minimize button in header */
+.cgpa-minimize-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cgpa-minimize-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Header buttons container */
+.cgpa-header-buttons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Widget hidden state */
+.canvas-gpa-widget.hidden {
+  display: none;
+}
+
+/* Minimized state - just show header */
+.canvas-gpa-widget.minimized .cgpa-content {
+  display: none;
+}
+
+.canvas-gpa-widget.minimized {
+  margin-bottom: 8px;
+}
+
+/* Keyboard shortcut hint */
+.cgpa-shortcut-hint {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-left: 8px;
+}

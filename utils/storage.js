@@ -14,6 +14,8 @@ const Storage = {
       courses: []
     },
     customGradingScales: {},
+    excludedAssignments: {},  // { courseId: [assignmentId, ...] }
+    widgetVisible: true,      // Whether the widget is shown or hidden
     settings: {
       showConfidenceIndicators: true,
       autoRefreshInterval: 15, // minutes
@@ -266,6 +268,52 @@ const Storage = {
     await this.set({
       settings: { ...settings, ...updates }
     });
+  },
+
+  // Excluded assignments methods
+  async getExcludedAssignments(courseId) {
+    const { excludedAssignments } = await this.get('excludedAssignments');
+    return excludedAssignments?.[courseId] || [];
+  },
+
+  async toggleAssignmentExclusion(courseId, assignmentId) {
+    const { excludedAssignments = {} } = await this.get('excludedAssignments');
+    const courseExclusions = excludedAssignments[courseId] || [];
+
+    const index = courseExclusions.indexOf(assignmentId);
+    if (index === -1) {
+      // Add to exclusions
+      courseExclusions.push(assignmentId);
+    } else {
+      // Remove from exclusions
+      courseExclusions.splice(index, 1);
+    }
+
+    excludedAssignments[courseId] = courseExclusions;
+    await this.set({ excludedAssignments });
+
+    return index === -1; // Returns true if now excluded, false if now included
+  },
+
+  async isAssignmentExcluded(courseId, assignmentId) {
+    const excluded = await this.getExcludedAssignments(courseId);
+    return excluded.includes(assignmentId);
+  },
+
+  // Widget visibility methods
+  async getWidgetVisible() {
+    const { widgetVisible } = await this.get('widgetVisible');
+    return widgetVisible !== false; // Default to true
+  },
+
+  async setWidgetVisible(visible) {
+    await this.set({ widgetVisible: visible });
+  },
+
+  async toggleWidgetVisible() {
+    const currentState = await this.getWidgetVisible();
+    await this.setWidgetVisible(!currentState);
+    return !currentState;
   }
 };
 
