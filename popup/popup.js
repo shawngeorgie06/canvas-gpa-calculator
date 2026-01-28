@@ -1820,7 +1820,7 @@ function calculateWhatIf() {
     resultDiv.className = 'whatif-result success';
     resultDiv.innerHTML = `
       <span class="result-message">Great news!</span>
-      <span class="result-score">Already there! 🎉</span>
+      <span class="result-score">Already there</span>
       <span class="result-message">You've already secured this grade. Even a 0% on the final keeps you above ${desiredGrade}%!</span>
     `;
   } else if (requiredScore <= 60) {
