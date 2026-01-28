@@ -68,6 +68,16 @@ const GPACalculator = {
       let gradePoints = course.gradePoints;
       let letterGrade = course.letterGrade;
 
+      // Skip courses with N/A letter grade - these should NOT affect GPA calculation
+      if (letterGrade === 'N/A' || letterGrade === 'NA') {
+        courseBreakdown.push({
+          ...course,
+          qualityPoints: null,
+          status: 'na_grade'
+        });
+        continue;
+      }
+
       // If no pre-calculated grade points, try to calculate from percentage
       if (gradePoints === null || gradePoints === undefined) {
         if (course.currentGrade !== null && course.currentGrade !== undefined) {
