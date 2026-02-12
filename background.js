@@ -3,61 +3,77 @@
  * Handles background tasks, alarms, and messaging
  */
 
+console.log('[Canvas GPA] Background service worker loading...');
+
+// Load required utility scripts
+importScripts('utils/constants.js');
+importScripts('utils/grading-scales.js');
+importScripts('utils/storage.js');
+
+console.log('[Canvas GPA] Utilities loaded');
+
+// Check and setup alarm when service worker starts
+setupRefreshAlarm();
+
 // Initialize extension on install
 chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('[Canvas GPA] Extension installed/updated:', details.reason);
 
-  // Initialize storage with defaults
-  const defaults = {
-    canvasApiToken: null,
-    canvasBaseUrl: null,
-    previousGPA: null,
-    previousCredits: 0,
-    currentSemester: { courses: [] },
-    customGradingScales: {},
-    settings: {
-      showConfidenceIndicators: true,
-      autoRefreshInterval: 15,
-      enableNotifications: true
-    },
-    cache: {
-      courses: null,
-      coursesTimestamp: null,
-      grades: {},
-      gradesTimestamp: {}
-    }
-  };
-
-  // Only set defaults for missing keys
-  const existingData = await chrome.storage.local.get(null);
-  const updates = {};
-
-  for (const [key, value] of Object.entries(defaults)) {
-    if (!(key in existingData)) {
-      updates[key] = value;
-    }
-  }
-
-  if (Object.keys(updates).length > 0) {
-    await chrome.storage.local.set(updates);
+  try {
+    // Initialize storage with defaults (single source of truth from Storage.defaults)
+    await Storage.initialize();
+  } catch (error) {
+    console.error('[Canvas GPA] Failed to initialize storage:', error);
   }
 
   // Set up periodic refresh alarm
-  chrome.alarms.create('refreshGrades', {
-    periodInMinutes: 15
-  });
+  setupRefreshAlarm();
 });
+
+// Startup - ensure refresh alarm is active
+chrome.runtime.onStartup?.addListener?.(() => {
+  console.log('[Canvas GPA] Service worker started');
+  setupRefreshAlarm();
+});
+
+// Helper function to setup/verify refresh alarm
+function setupRefreshAlarm() {
+  console.log('[Canvas GPA] Setting up refresh alarm...');
+  try {
+    // Clear any existing alarm first to avoid duplicates
+    chrome.alarms.clear('refreshGrades', (wasCleared) => {
+      console.log('[Canvas GPA] Cleared existing alarm. Was it active?', wasCleared);
+
+      // Create new alarm
+      chrome.alarms.create('refreshGrades', {
+        periodInMinutes: 15
+      });
+      console.log('[Canvas GPA] ✓ Refresh alarm created - will run every 15 minutes');
+      console.log('[Canvas GPA] Next refresh will occur in ~15 minutes');
+    });
+  } catch (error) {
+    console.error('[Canvas GPA] ✗ Failed to setup refresh alarm:', error);
+  }
+}
 
 // Handle alarms
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'refreshGrades') {
-    console.log('[Canvas GPA] Periodic grade refresh triggered');
-    await refreshGradesInBackground();
+    console.log('[Canvas GPA] Periodic grade refresh triggered at', new Date().toLocaleTimeString());
+    const result = await refreshGradesInBackground();
+    console.log('[Canvas GPA] Periodic refresh result:', result);
   }
 });
 
 // Handle messages from content scripts and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // SECURITY: Only accept messages from the extension itself
+  if (sender.id !== chrome.runtime.id) {
+    console.warn('[Canvas GPA] Rejecting message from untrusted sender:', sender.id);
+    sendResponse({ error: 'Untrusted sender' });
+    return;
+  }
+
   handleMessage(message, sender)
     .then(response => sendResponse(response))
     .catch(error => sendResponse({ error: error.message }));
@@ -68,32 +84,86 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 /**
  * Handle incoming messages
+ * SECURITY: Validates all message parameters before processing
  */
 async function handleMessage(message, sender) {
-  switch (message.type) {
-    case 'GET_COURSES':
-      return await getCourses();
+  console.log('[Canvas GPA] Received message:', message.type);
 
-    case 'GET_COURSE_GRADES':
-      return await getCourseGrades(message.courseId);
+  // SECURITY: Validate message structure
+  if (!message || typeof message !== 'object' || !message.type) {
+    console.error('[Canvas GPA] Invalid message format');
+    return { error: 'Invalid message format' };
+  }
 
-    case 'GET_GRADING_SCALE':
-      return await getGradingScale(message.courseId);
+  // SECURITY: Validate message type is a string
+  if (typeof message.type !== 'string') {
+    console.error('[Canvas GPA] Invalid message type');
+    return { error: 'Invalid message type' };
+  }
 
-    case 'SET_CUSTOM_SCALE':
-      return await setCustomScale(message.courseId, message.scale);
+  // SECURITY: Whitelist of allowed message types
+  const allowedTypes = [
+    'GET_COURSES', 'GET_COURSE_GRADES', 'GET_GRADING_SCALE',
+    'SET_CUSTOM_SCALE', 'CALCULATE_GPA', 'REFRESH_DATA',
+    'VERIFY_TOKEN', 'GET_ASSIGNMENT_GROUPS', 'GET_ENROLLMENTS',
+    'GET_COURSE_INFO', 'GET_GRADING_STANDARDS'
+  ];
 
-    case 'CALCULATE_GPA':
-      return await calculateGPA();
+  if (!allowedTypes.includes(message.type)) {
+    console.error('[Canvas GPA] Unknown message type:', message.type);
+    return { error: 'Unknown message type' };
+  }
 
-    case 'REFRESH_DATA':
-      return await refreshGradesInBackground();
+  // SECURITY: Validate courseId if present
+  if (message.courseId !== undefined) {
+    if (!Number.isInteger(message.courseId) || message.courseId <= 0) {
+      console.error('[Canvas GPA] Invalid courseId');
+      return { error: 'Invalid course ID' };
+    }
+  }
 
-    case 'VERIFY_TOKEN':
-      return await verifyToken();
+  try {
+    switch (message.type) {
+      case 'GET_COURSES':
+        return await getCourses();
 
-    default:
-      return { error: 'Unknown message type' };
+      case 'GET_COURSE_GRADES':
+        return await getCourseGrades(message.courseId);
+
+      case 'GET_GRADING_SCALE':
+        return await getGradingScale(message.courseId);
+
+      case 'SET_CUSTOM_SCALE':
+        // Validate scale object
+        if (!message.scale || typeof message.scale !== 'object') {
+          return { error: 'Invalid scale format' };
+        }
+        return await setCustomScale(message.courseId, message.scale);
+
+      case 'CALCULATE_GPA':
+        return await calculateGPA();
+
+      case 'REFRESH_DATA':
+        return await refreshGradesInBackground();
+
+      case 'VERIFY_TOKEN':
+        return await verifyToken();
+
+      case 'GET_ASSIGNMENT_GROUPS':
+        return await getAssignmentGroups(message.courseId);
+
+      case 'GET_ENROLLMENTS':
+        return await getEnrollments(message.courseId);
+
+      case 'GET_COURSE_INFO':
+        return await getCourseInfo(message.courseId);
+
+      case 'GET_GRADING_STANDARDS':
+        return await getGradingStandards(message.courseId);
+    }
+  } catch (error) {
+    console.error('[Canvas GPA] Message handler error:', error.name);
+    return { error: 'Internal server error' };
   }
 }
 
@@ -102,16 +172,22 @@ async function handleMessage(message, sender) {
  */
 async function refreshGradesInBackground() {
   try {
-    const { canvasApiToken, canvasBaseUrl, settings, cache: oldCache } = await chrome.storage.local.get([
-      'canvasApiToken',
-      'canvasBaseUrl',
+    console.log('[Canvas GPA] Starting background grade refresh...');
+
+    // Get decrypted token from Storage utility
+    const canvasApiToken = await Storage.getApiToken();
+    const canvasBaseUrl = await Storage.getBaseUrl();
+    const { settings, cache: oldCache } = await chrome.storage.local.get([
       'settings',
       'cache'
     ]);
 
     if (!canvasApiToken || !canvasBaseUrl) {
+      console.warn('[Canvas GPA] Refresh failed - not configured');
       return { success: false, reason: 'Not configured' };
     }
+
+    console.log('[Canvas GPA] Token and URL found, fetching courses...');
 
     // Fetch courses with term info
     const coursesResponse = await fetch(
@@ -139,13 +215,13 @@ async function refreshGradesInBackground() {
     // Auto-sync: Check for grade changes
     const gradeChanges = detectGradeChanges(oldCache?.courses, courses);
 
-    // Update cache
+    // Update cache - CLEAR grade cache to force fresh fetch
     await chrome.storage.local.set({
       cache: {
         courses,
         coursesTimestamp: Date.now(),
-        grades: oldCache?.grades || {},
-        gradesTimestamp: oldCache?.gradesTimestamp || {}
+        grades: {},  // Clear old grade cache to force refresh
+        gradesTimestamp: {}  // Clear timestamps
       },
       lastSyncTime: Date.now(),
       detectedSemesters: semesterInfo.semesters,
@@ -170,12 +246,12 @@ async function refreshGradesInBackground() {
       chrome.tabs.sendMessage(tab.id, { type: 'REFRESH_DATA' }).catch(() => {});
     }
 
-    console.log('[Canvas GPA] Auto-sync completed:', {
-      courseCount: courses.length,
-      semesters: semesterInfo.semesters,
-      upcoming: semesterInfo.upcomingSemesters,
-      gradeChanges: gradeChanges.length
-    });
+    // SECURITY: Only log generic completion message, not sensitive data
+    if (gradeChanges.length > 0) {
+      console.log('[Canvas GPA] Auto-sync completed - grade changes detected');
+    } else {
+      console.log('[Canvas GPA] Auto-sync completed');
+    }
 
     return {
       success: true,
@@ -199,6 +275,8 @@ async function autoDetectSemesters(courses) {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1; // 1-12
 
+  console.log('[Canvas GPA] Detecting semesters. Current date:', now.toDateString(), `(Year: ${currentYear}, Month: ${currentMonth})`);
+
   for (const course of courses) {
     const termName = course.term?.name || 'Unknown Term';
 
@@ -207,6 +285,7 @@ async function autoDetectSemesters(courses) {
 
     if (!semesterSet.has(termName)) {
       const isUpcoming = isFutureSemester(termName, currentYear, currentMonth);
+      console.log(`[Canvas GPA] Semester "${termName}": isUpcoming = ${isUpcoming}`);
       semesterSet.set(termName, {
         name: termName,
         isUpcoming: isUpcoming,
@@ -219,9 +298,15 @@ async function autoDetectSemesters(courses) {
   const allSemesters = Array.from(semesterSet.values())
     .sort((a, b) => b.sortKey - a.sortKey);
 
+  const detected = allSemesters.map(s => s.name);
+  const upcoming = allSemesters.filter(s => s.isUpcoming).map(s => s.name);
+
+  console.log('[Canvas GPA] Detected semesters:', detected);
+  console.log('[Canvas GPA] Upcoming semesters:', upcoming);
+
   return {
-    semesters: allSemesters.map(s => s.name),
-    upcomingSemesters: allSemesters.filter(s => s.isUpcoming).map(s => s.name)
+    semesters: detected,
+    upcomingSemesters: upcoming
   };
 }
 
@@ -234,7 +319,7 @@ function isRealSemester(name) {
 }
 
 /**
- * Check if a semester is upcoming/in-progress (not yet completed)
+ * Check if a semester is upcoming (not yet started)
  */
 function isFutureSemester(termName, currentYear, currentMonth) {
   const match = termName.match(/(Spring|Summer|Fall|Winter)\s*'?(\d{2,4})/i);
@@ -245,22 +330,31 @@ function isFutureSemester(termName, currentYear, currentMonth) {
 
   const season = match[1].toLowerCase();
 
-  // Semester END months (when grades are finalized)
-  const seasonEndMonth = {
-    winter: 2,   // Winter ends ~February
-    spring: 5,   // Spring ends ~May
-    summer: 8,   // Summer ends ~August
-    fall: 12     // Fall ends ~December
+  // Semester START months
+  const seasonStartMonth = {
+    winter: 1,   // Winter starts ~January
+    spring: 1,   // Spring starts ~January
+    summer: 5,   // Summer starts ~May
+    fall: 8      // Fall starts ~August
   };
 
-  const semesterEndMonth = seasonEndMonth[season] ?? 12;
+  const semesterStartMonth = seasonStartMonth[season] ?? 1;
+
+  console.log(`[Canvas GPA] Checking if "${termName}" is upcoming: season=${season}, year=${year}, startMonth=${semesterStartMonth}, currentYear=${currentYear}, currentMonth=${currentMonth}`);
 
   // Future year = upcoming
-  if (year > currentYear) return true;
+  if (year > currentYear) {
+    console.log(`[Canvas GPA]   -> Year ${year} > ${currentYear} = UPCOMING`);
+    return true;
+  }
 
-  // Same year but semester hasn't ended yet = upcoming
-  if (year === currentYear && semesterEndMonth > currentMonth) return true;
+  // Same year but semester hasn't started yet = upcoming
+  if (year === currentYear && semesterStartMonth > currentMonth) {
+    console.log(`[Canvas GPA]   -> Start month ${semesterStartMonth} > current month ${currentMonth} = UPCOMING`);
+    return true;
+  }
 
+  console.log(`[Canvas GPA]   -> NOT upcoming (current/past semester)`);
   return false;
 }
 
@@ -341,7 +435,7 @@ async function notifyGradeChanges(changes) {
   try {
     await chrome.notifications.create({
       type: 'basic',
-      iconUrl: 'icons/icon48.png',
+      iconUrl: chrome.runtime.getURL('icons/icon.svg'),
       title: 'Canvas GPA - Grade Update',
       message: message
     });
@@ -354,11 +448,9 @@ async function notifyGradeChanges(changes) {
  * Get courses from Canvas
  */
 async function getCourses() {
-  const { canvasApiToken, canvasBaseUrl, cache } = await chrome.storage.local.get([
-    'canvasApiToken',
-    'canvasBaseUrl',
-    'cache'
-  ]);
+  const canvasApiToken = await Storage.getApiToken();
+  const canvasBaseUrl = await Storage.getBaseUrl();
+  const { cache } = await chrome.storage.local.get(['cache']);
 
   if (!canvasApiToken || !canvasBaseUrl) {
     throw new Error('Extension not configured');
@@ -405,11 +497,9 @@ async function getCourses() {
  * Get grades for a specific course
  */
 async function getCourseGrades(courseId) {
-  const { canvasApiToken, canvasBaseUrl, cache } = await chrome.storage.local.get([
-    'canvasApiToken',
-    'canvasBaseUrl',
-    'cache'
-  ]);
+  const canvasApiToken = await Storage.getApiToken();
+  const canvasBaseUrl = await Storage.getBaseUrl();
+  const { cache } = await chrome.storage.local.get(['cache']);
 
   if (!canvasApiToken || !canvasBaseUrl) {
     throw new Error('Extension not configured');
@@ -463,11 +553,9 @@ async function getCourseGrades(courseId) {
  * Get grading scale for a course
  */
 async function getGradingScale(courseId) {
-  const { canvasApiToken, canvasBaseUrl, customGradingScales } = await chrome.storage.local.get([
-    'canvasApiToken',
-    'canvasBaseUrl',
-    'customGradingScales'
-  ]);
+  const canvasApiToken = await Storage.getApiToken();
+  const canvasBaseUrl = await Storage.getBaseUrl();
+  const { customGradingScales } = await chrome.storage.local.get(['customGradingScales']);
 
   // Check for custom scale first
   if (customGradingScales?.[courseId]) {
@@ -498,7 +586,7 @@ async function getGradingScale(courseId) {
       const standards = await response.json();
       if (standards.length > 0 && standards[0].grading_scheme) {
         return {
-          scale: convertCanvasScheme(standards[0].grading_scheme),
+          scale: GradingScales.convertCanvasScheme(standards[0].grading_scheme),
           source: 'canvas_api',
           confidence: 95,
           title: standards[0].title
@@ -509,7 +597,12 @@ async function getGradingScale(courseId) {
     console.warn('[Canvas GPA] Could not fetch grading standard:', error);
   }
 
-  return getDefaultGradingScale();
+  return {
+    scale: GradingScales.getDefault(),
+    source: 'default_fallback',
+    confidence: 50,
+    warning: 'Using default scale. Please verify with syllabus.'
+  };
 }
 
 /**
@@ -528,6 +621,166 @@ async function setCustomScale(courseId, scale) {
 
   await chrome.storage.local.set({ customGradingScales: updatedScales });
   return { success: true };
+}
+
+/**
+ * Parse the Link header to get next page URL (for pagination support)
+ */
+function parseNextLink(linkHeader) {
+  if (!linkHeader) return null;
+
+  const links = linkHeader.split(',');
+  for (const link of links) {
+    const match = link.match(/<([^>]+)>;\s*rel="next"/);
+    if (match) {
+      // Extract just the path portion
+      const url = new URL(match[1]);
+      return url.pathname + url.search;
+    }
+  }
+  return null;
+}
+
+/**
+ * Get assignment groups for a course (with caching and pagination)
+ */
+async function getAssignmentGroups(courseId) {
+  const canvasApiToken = await Storage.getApiToken();
+  const canvasBaseUrl = await Storage.getBaseUrl();
+  const { cache } = await chrome.storage.local.get(['cache']);
+
+  if (!canvasApiToken || !canvasBaseUrl) {
+    throw new Error('Extension not configured');
+  }
+
+  // Check cache (30 minutes for assignment groups - less frequently updated)
+  const cacheKey = `assignmentGroups_${courseId}`;
+  if (cache?.[cacheKey] && cache?.gradesTimestamp?.[cacheKey]) {
+    const age = Date.now() - cache.gradesTimestamp[cacheKey];
+    if (age < 30 * 60 * 1000) {
+      return { groups: cache[cacheKey], fromCache: true };
+    }
+  }
+
+  // Fetch from API with pagination support
+  // Canvas API uses Link header for pagination when there are more results
+  const allGroups = [];
+  let url = `/api/v1/courses/${courseId}/assignment_groups?include[]=assignments&include[]=submission&per_page=100`;
+
+  while (url) {
+    const response = await fetch(
+      `${canvasBaseUrl}${url}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${canvasApiToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    allGroups.push(...(Array.isArray(data) ? data : [data]));
+
+    // Check for next page in Link header
+    const linkHeader = response.headers.get('Link');
+    url = linkHeader ? parseNextLink(linkHeader) : null;
+  }
+
+  const groups = allGroups;
+
+  // Update cache
+  await chrome.storage.local.set({
+    cache: {
+      ...cache,
+      [cacheKey]: groups,
+      gradesTimestamp: {
+        ...cache?.gradesTimestamp,
+        [cacheKey]: Date.now()
+      }
+    }
+  });
+
+  return { groups, fromCache: false };
+}
+
+/**
+ * Get enrollments (grades) for a course
+ */
+async function getEnrollments(courseId) {
+  const canvasApiToken = await Storage.getApiToken();
+  const canvasBaseUrl = await Storage.getBaseUrl();
+
+  if (!canvasApiToken || !canvasBaseUrl) {
+    throw new Error('Extension not configured');
+  }
+
+  const response = await fetch(
+    `${canvasBaseUrl}/api/v1/courses/${courseId}/enrollments?user_id=self&include[]=grades`,
+    {
+      headers: {
+        'Authorization': `Bearer ${canvasApiToken}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  let enrollmentData = await response.json();
+
+  // Filter to only student enrollments (exclude auditors, teachers, etc.)
+  if (Array.isArray(enrollmentData)) {
+    const studentEnrollment = enrollmentData.find(e => e.type === 'StudentEnrollment');
+    if (studentEnrollment) {
+      enrollmentData = [studentEnrollment];
+      // SECURITY: Don't log actual grade scores, only confirm enrollment was found
+      console.log(`[BG] Course ${courseId}: enrollment data retrieved`);
+    }
+  }
+
+  return enrollmentData;
+}
+
+/**
+ * Get course info
+ */
+async function getCourseInfo(courseId) {
+  const canvasApiToken = await Storage.getApiToken();
+  const canvasBaseUrl = await Storage.getBaseUrl();
+
+  if (!canvasApiToken || !canvasBaseUrl) {
+    throw new Error('Extension not configured');
+  }
+
+  const response = await fetch(
+    `${canvasBaseUrl}/api/v1/courses/${courseId}`,
+    {
+      headers: {
+        'Authorization': `Bearer ${canvasApiToken}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  return await response.json();
+}
+
+/**
+ * Get grading standards for a course (uses existing getGradingScale logic)
+ * Note: This is a wrapper around getGradingScale that returns standards data
+ */
+async function getGradingStandards(courseId) {
+  return await getGradingScale(courseId);
 }
 
 /**
@@ -577,10 +830,8 @@ async function calculateGPA() {
  * Verify API token
  */
 async function verifyToken() {
-  const { canvasApiToken, canvasBaseUrl } = await chrome.storage.local.get([
-    'canvasApiToken',
-    'canvasBaseUrl'
-  ]);
+  const canvasApiToken = await Storage.getApiToken();
+  const canvasBaseUrl = await Storage.getBaseUrl();
 
   if (!canvasApiToken || !canvasBaseUrl) {
     return { valid: false, reason: 'Not configured' };
@@ -605,51 +856,8 @@ async function verifyToken() {
   }
 }
 
-/**
- * Convert Canvas grading scheme format
- */
-function convertCanvasScheme(canvasScheme) {
-  const scale = {};
-  const sortedScheme = [...canvasScheme].sort((a, b) => b.value - a.value);
-
-  for (let i = 0; i < sortedScheme.length; i++) {
-    const current = sortedScheme[i];
-    const min = current.value * 100;
-    const max = i === 0 ? 100 : (sortedScheme[i - 1].value * 100) - 0.01;
-
-    scale[current.name] = {
-      min: Math.round(min * 100) / 100,
-      max: Math.round(max * 100) / 100
-    };
-  }
-
-  return scale;
-}
-
-/**
- * Get default grading scale
- */
-function getDefaultGradingScale() {
-  return {
-    scale: {
-      'A': { min: 93, max: 100 },
-      'A-': { min: 90, max: 92.99 },
-      'B+': { min: 87, max: 89.99 },
-      'B': { min: 83, max: 86.99 },
-      'B-': { min: 80, max: 82.99 },
-      'C+': { min: 77, max: 79.99 },
-      'C': { min: 73, max: 76.99 },
-      'C-': { min: 70, max: 72.99 },
-      'D+': { min: 67, max: 69.99 },
-      'D': { min: 63, max: 66.99 },
-      'D-': { min: 60, max: 62.99 },
-      'F': { min: 0, max: 59.99 }
-    },
-    source: 'default_fallback',
-    confidence: 50,
-    warning: 'Using default scale. Please verify with syllabus.'
-  };
-}
+// NOTE: convertCanvasScheme and getDefaultGradingScale moved to utils/grading-scales.js
+// Use GradingScales.convertCanvasScheme() and GradingScales.getDefault() instead
 
 // Log when service worker starts
 console.log('[Canvas GPA] Background service worker started');

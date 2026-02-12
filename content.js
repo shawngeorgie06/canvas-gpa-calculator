@@ -8,6 +8,7 @@ const ContentState = {
   courseId: null,
   courseData: null,
   gradingScale: null,
+  gradePoints: GRADE_POINTS_NJIT,  // Default to NJIT, will be updated from storage
   excludedAssignments: [],
   isInitialized: false,
   widgetContainer: null,
@@ -54,26 +55,77 @@ async function initContentScript() {
  */
 function extractCourseId() {
   const match = window.location.pathname.match(/\/courses\/(\d+)/);
-  return match ? match[1] : null;
+  return match ? parseInt(match[1], 10) : null;
 }
 
 /**
- * Wait for Canvas to fully load
+ * SECURITY: Sanitize HTML to prevent XSS attacks
+ * Escapes dangerous characters in user-supplied strings
  */
-function waitForCanvasLoad() {
+function sanitizeHTML(str) {
+  if (typeof str !== 'string') return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+/**
+ * SECURITY: Validate Canvas course ID format
+ * Must be a positive integer
+ */
+function isValidCourseId(courseId) {
+  if (!courseId) return false;
+  const num = parseInt(courseId, 10);
+  return Number.isFinite(num) && num > 0;
+}
+
+/**
+ * SECURITY: Validate assignment ID format
+ */
+function isValidAssignmentId(assignmentId) {
+  if (!assignmentId) return false;
+  const num = parseInt(assignmentId, 10);
+  return Number.isFinite(num) && num > 0;
+}
+
+/**
+ * Wait for Canvas to fully load (using MutationObserver for efficiency)
+ * Replaces polling approach with event-driven monitoring
+ */
+function waitForCanvasLoad(timeout = 5000) {
   return new Promise((resolve) => {
-    const checkForCanvas = () => {
-      // Check for common Canvas elements
+    // Check if element already exists (immediate case)
+    const sidebar = document.querySelector('#right-side, .right-side-wrapper');
+    const content = document.querySelector('#content, .ic-Layout-contentMain');
+
+    if (sidebar || content) {
+      resolve();
+      return;
+    }
+
+    // Watch for DOM changes using MutationObserver (more efficient than polling every 100ms)
+    const observer = new MutationObserver(() => {
       const sidebar = document.querySelector('#right-side, .right-side-wrapper');
       const content = document.querySelector('#content, .ic-Layout-contentMain');
 
       if (sidebar || content) {
+        observer.disconnect();
         resolve();
-      } else {
-        setTimeout(checkForCanvas, 100);
       }
-    };
-    checkForCanvas();
+    });
+
+    // Observe body for child list changes (new elements added)
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    // Timeout after specified milliseconds (don't wait forever if elements never appear)
+    setTimeout(() => {
+      observer.disconnect();
+      console.warn('[Canvas GPA] Timeout waiting for Canvas to load, proceeding anyway');
+      resolve();
+    }, timeout);
   });
 }
 
@@ -82,27 +134,41 @@ function waitForCanvasLoad() {
  */
 async function checkConfiguration() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['canvasApiToken', 'canvasBaseUrl'], (result) => {
-      resolve(Boolean(result.canvasApiToken && result.canvasBaseUrl));
+    chrome.storage.local.get(['canvasApiTokenEncrypted', 'canvasBaseUrl'], (result) => {
+      resolve(Boolean(result.canvasApiTokenEncrypted && result.canvasBaseUrl));
     });
   });
 }
 
 /**
- * Get stored data
+ * Get stored data with error handling
  */
 function getStoredData(keys) {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(keys, resolve);
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(keys, (result) => {
+      if (chrome.runtime.lastError) {
+        console.error('[Canvas GPA] Storage read error:', chrome.runtime.lastError);
+        reject(chrome.runtime.lastError);
+      } else {
+        resolve(result);
+      }
+    });
   });
 }
 
 /**
- * Save data to storage
+ * Save data to storage with error handling
  */
 function saveToStorage(data) {
-  return new Promise((resolve) => {
-    chrome.storage.local.set(data, resolve);
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set(data, () => {
+      if (chrome.runtime.lastError) {
+        console.error('[Canvas GPA] Storage write error:', chrome.runtime.lastError);
+        reject(chrome.runtime.lastError);
+      } else {
+        resolve();
+      }
+    });
   });
 }
 
@@ -258,9 +324,21 @@ function createWidgetElement() {
     </div>
   `;
 
-  // Add refresh handler
+  // Add refresh handler with debounce to prevent rapid clicking
+  let isRefreshing = false;
   widget.querySelector('.cgpa-refresh-btn').addEventListener('click', async () => {
-    await loadAndDisplayCourseData(true);
+    if (isRefreshing) return; // Prevent multiple simultaneous refreshes
+
+    isRefreshing = true;
+    const refreshBtn = widget.querySelector('.cgpa-refresh-btn');
+    refreshBtn.disabled = true;
+
+    try {
+      await loadAndDisplayCourseData(true);
+    } finally {
+      isRefreshing = false;
+      refreshBtn.disabled = false;
+    }
   });
 
   // Add minimize handler
@@ -278,15 +356,23 @@ function createWidgetElement() {
 
 /**
  * Load and display course data
+ * SECURITY: Does NOT retrieve or store tokens - uses background worker via message passing
  */
 async function loadAndDisplayCourseData(forceRefresh = false) {
   const content = ContentState.widgetContainer.querySelector('.cgpa-content');
   content.innerHTML = '<div class="cgpa-loading">Loading...</div>';
 
   try {
-    const { canvasApiToken, canvasBaseUrl } = await getStoredData(['canvasApiToken', 'canvasBaseUrl']);
+    // Check if configured by asking background worker (doesn't expose token)
+    let isConfigured = false;
+    try {
+      await chrome.runtime.sendMessage({ type: 'VERIFY_TOKEN' });
+      isConfigured = true;
+    } catch (error) {
+      isConfigured = false;
+    }
 
-    if (!canvasApiToken || !canvasBaseUrl) {
+    if (!isConfigured) {
       content.innerHTML = `
         <div class="cgpa-setup">
           <p>Please configure the extension first.</p>
@@ -296,17 +382,17 @@ async function loadAndDisplayCourseData(forceRefresh = false) {
       return;
     }
 
-    // Fetch course data
-    const courseData = await fetchCourseData(canvasApiToken, canvasBaseUrl, ContentState.courseId);
+    // Fetch course data (via background worker as API gateway - NO TOKEN PASSED)
+    const courseData = await fetchCourseData(ContentState.courseId);
     ContentState.courseData = courseData;
 
-    // Get grading scale
-    const gradingScale = await getGradingScaleForCourse(
-      canvasApiToken,
-      canvasBaseUrl,
-      ContentState.courseId
-    );
+    // Get grading scale (via background worker as API gateway - NO TOKEN PASSED)
+    const gradingScale = await getGradingScaleForCourse(ContentState.courseId);
     ContentState.gradingScale = gradingScale;
+
+    // Load the user's selected grading scale to get correct GPA points mapping
+    const gradePoints = await getGradePointsScale();
+    ContentState.gradePoints = gradePoints;
 
     // Load excluded assignments
     const { excludedAssignments = {} } = await getStoredData(['excludedAssignments']);
@@ -315,175 +401,113 @@ async function loadAndDisplayCourseData(forceRefresh = false) {
     // Calculate grade (with exclusions applied)
     const gradeResult = calculateGradeFromData(courseData, ContentState.excludedAssignments);
 
-    // Get grade info using course-specific scale
-    const gradeInfo = convertGradeWithScale(gradeResult.percentage, gradingScale);
+    // Fallback to Canvas enrollment current_score if assignment calculation failed
+    if (gradeResult.percentage === null && courseData.currentGrade !== null) {
+      gradeResult.percentage = courseData.currentGrade;
+      gradeResult.source = 'enrollment';
+    }
+
+    // Get grade info using course-specific scale AND correct GPA points
+    const gradeInfo = convertGradeWithScale(gradeResult.percentage, gradingScale, gradePoints);
 
     // Render the widget
     renderWidget(courseData, gradeResult, gradeInfo, gradingScale);
 
   } catch (error) {
-    console.error('[Canvas GPA] Error loading course data:', error);
+    // Log full error internally, show generic message to user
+    console.error('[Canvas GPA] Error loading course data:', error.message || error);
+
+    let userMessage = 'Unable to load course data. Please try again.';
+    if (error.message?.includes('not configured')) {
+      userMessage = 'Extension not configured. Please check your API token.';
+    } else if (error.message?.includes('unauthorized')) {
+      userMessage = 'Invalid API token. Please check your credentials.';
+    }
+
     content.innerHTML = `
       <div class="cgpa-error">
         <p>Error loading data</p>
-        <p class="cgpa-hint">${error.message}</p>
+        <p class="cgpa-hint">${sanitizeHTML(userMessage)}</p>
       </div>
     `;
   }
 }
 
 /**
- * Fetch course data from Canvas API
+ * Fetch course data from Canvas API via background worker (centralized gateway)
  */
-async function fetchCourseData(token, baseUrl, courseId) {
-  const headers = {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  };
-
-  // Fetch enrollment (for current grade)
-  const enrollmentResponse = await fetch(
-    `${baseUrl}/api/v1/courses/${courseId}/enrollments?user_id=self`,
-    { headers }
-  );
-
-  if (!enrollmentResponse.ok) {
-    throw new Error('Failed to fetch enrollment data');
-  }
-
-  const enrollments = await enrollmentResponse.json();
-  const enrollment = enrollments[0];
-
-  // Fetch assignment groups
-  const groupsResponse = await fetch(
-    `${baseUrl}/api/v1/courses/${courseId}/assignment_groups?include[]=assignments&include[]=submission`,
-    { headers }
-  );
-
-  if (!groupsResponse.ok) {
-    throw new Error('Failed to fetch assignment groups');
-  }
-
-  const assignmentGroups = await groupsResponse.json();
-
-  // Fetch course info
-  const courseResponse = await fetch(
-    `${baseUrl}/api/v1/courses/${courseId}`,
-    { headers }
-  );
-
-  const course = courseResponse.ok ? await courseResponse.json() : null;
-
-  return {
-    enrollment,
-    assignmentGroups,
-    course,
-    currentGrade: enrollment?.grades?.current_score,
-    finalGrade: enrollment?.grades?.final_score
-  };
-}
-
-/**
- * Get grading scale for a course
- */
-async function getGradingScaleForCourse(token, baseUrl, courseId) {
-  // Check for custom scale first
-  const { customGradingScales } = await getStoredData(['customGradingScales']);
-  if (customGradingScales?.[courseId]) {
-    return {
-      scale: customGradingScales[courseId].scale,
-      source: 'manual_override',
-      confidence: 100
-    };
-  }
-
-  // Try Canvas API
+async function fetchCourseData(courseId) {
   try {
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
+    // Fetch all data from background service worker (API gateway)
+    // This centralizes API access and ensures consistent rate limiting, caching, and error handling
+    const [enrollmentData, groupsData, courseData] = await Promise.all([
+      chrome.runtime.sendMessage({ type: 'GET_ENROLLMENTS', courseId }),
+      chrome.runtime.sendMessage({ type: 'GET_ASSIGNMENT_GROUPS', courseId }),
+      chrome.runtime.sendMessage({ type: 'GET_COURSE_INFO', courseId })
+    ]);
+
+    const enrollment = enrollmentData[0];
+
+    return {
+      enrollment,
+      assignmentGroups: groupsData.groups || [],
+      course: courseData,
+      currentGrade: enrollment?.grades?.current_score,
+      finalGrade: enrollment?.grades?.final_score
     };
-
-    const response = await fetch(
-      `${baseUrl}/api/v1/courses/${courseId}/grading_standards`,
-      { headers }
-    );
-
-    if (response.ok) {
-      const standards = await response.json();
-      if (standards.length > 0 && standards[0].grading_scheme) {
-        const scale = convertCanvasScheme(standards[0].grading_scheme);
-        return {
-          scale,
-          source: 'canvas_api',
-          confidence: 95,
-          title: standards[0].title
-        };
-      }
-    }
   } catch (error) {
-    console.warn('[Canvas GPA] Could not fetch grading standard:', error);
+    console.error('[Canvas GPA] Error fetching course data:', error.message || error);
+    throw error;
   }
-
-  // Return default
-  return {
-    scale: getDefaultScale(),
-    source: 'default_fallback',
-    confidence: 50,
-    warning: 'Using NJIT default scale. Verify with your syllabus.'
-  };
 }
 
 /**
- * Convert Canvas grading scheme format
+ * Get grading scale for a course (via background worker as API gateway)
  */
-function convertCanvasScheme(canvasScheme) {
-  const scale = {};
-  const sortedScheme = [...canvasScheme].sort((a, b) => b.value - a.value);
-
-  for (let i = 0; i < sortedScheme.length; i++) {
-    const current = sortedScheme[i];
-    const min = current.value * 100;
-    const max = i === 0 ? 100 : (sortedScheme[i - 1].value * 100) - 0.01;
-
-    scale[current.name] = {
-      min: Math.round(min * 100) / 100,
-      max: Math.round(max * 100) / 100
+async function getGradingScaleForCourse(courseId) {
+  try {
+    // Request grading scale from background service worker
+    // This handles: custom scales, Canvas API lookup, and defaults
+    const scale = await chrome.runtime.sendMessage({
+      type: 'GET_GRADING_STANDARDS',
+      courseId
+    });
+    return scale;
+  } catch (error) {
+    console.error('[Canvas GPA] Error fetching grading scale:', error);
+    // Fallback to default
+    return {
+      scale: GradingScales.getDefault(),
+      source: 'default_fallback',
+      confidence: 50,
+      warning: 'Using default scale. Verify with your syllabus.'
     };
   }
-
-  return scale;
 }
 
-/**
- * Get default grading scale (NJIT standard)
- * Note: NJIT doesn't use A-, B-, C-, D+, D- grades
- * Percentages are common defaults - verify with your syllabus
- */
-function getDefaultScale() {
-  return {
-    'A': { min: 90, max: 100 },
-    'B+': { min: 85, max: 89.99 },
-    'B': { min: 80, max: 84.99 },
-    'C+': { min: 75, max: 79.99 },
-    'C': { min: 70, max: 74.99 },
-    'D': { min: 60, max: 69.99 },
-    'F': { min: 0, max: 59.99 }
-  };
-}
+// NOTE: convertCanvasScheme and getDefaultScale moved to utils/grading-scales.js
+// Use GradingScales.convertCanvasScheme() and GradingScales.getDefault() instead
 
 /**
- * GPA points mapping (NJIT official scale)
+ * Get current grading scale from storage
+ * Returns the appropriate GRADE_POINTS based on user's selected scale
  */
-const GRADE_POINTS = {
-  'A': 4.0,
-  'B+': 3.5,
-  'B': 3.0,
-  'C+': 2.5,
-  'C': 2.0,
-  'D': 1.0,
-  'F': 0.0
-};
+async function getGradePointsScale() {
+  try {
+    const { selectedGradingScale = 'njit' } = await getStoredData(['selectedGradingScale']);
+
+    const scales = {
+      'njit': GRADE_POINTS_NJIT,
+      'plusMinus': GRADE_POINTS_PLUS_MINUS,
+      'standard': GRADE_POINTS_STANDARD
+    };
+
+    return scales[selectedGradingScale] || GRADE_POINTS_NJIT;
+  } catch (error) {
+    console.error('[Canvas GPA] Error getting grading scale, using default:', error);
+    return GRADE_POINTS_NJIT;
+  }
+}
 
 /**
  * Calculate grade from assignment data
@@ -629,8 +653,11 @@ function calculatePointsGrade(groups, excludedAssignments = []) {
 
 /**
  * Convert grade using course-specific scale
+ * @param {number} percentage - Grade percentage
+ * @param {object} gradingScale - Grading scale with letter grade ranges
+ * @param {object} gradePoints - GPA points mapping for letter grades
  */
-function convertGradeWithScale(percentage, gradingScale) {
+function convertGradeWithScale(percentage, gradingScale, gradePoints = GRADE_POINTS_NJIT) {
   if (percentage === null) {
     return { letterGrade: null, gpaPoints: null };
   }
@@ -648,7 +675,7 @@ function convertGradeWithScale(percentage, gradingScale) {
 
   return {
     letterGrade,
-    gpaPoints: GRADE_POINTS[letterGrade] ?? 0
+    gpaPoints: gradePoints[letterGrade] ?? 0
   };
 }
 
@@ -826,6 +853,26 @@ function renderAssignmentList(assignmentGroups, excludedAssignments) {
  * @param {string} assignmentId - ID of the assignment to toggle
  */
 async function handleAssignmentToggle(assignmentId) {
+  // SECURITY: Validate assignment ID is a valid number
+  if (!isValidAssignmentId(assignmentId)) {
+    console.error('[Canvas GPA] Invalid assignment ID:', assignmentId);
+    return;
+  }
+
+  // SECURITY: Verify assignment exists in the course
+  let assignmentExists = false;
+  for (const group of ContentState.courseData?.assignmentGroups || []) {
+    if (group.assignments?.some(a => a.id.toString() === assignmentId.toString())) {
+      assignmentExists = true;
+      break;
+    }
+  }
+
+  if (!assignmentExists) {
+    console.error('[Canvas GPA] Assignment not found in course:', assignmentId);
+    return;
+  }
+
   const { excludedAssignments = {} } = await getStoredData(['excludedAssignments']);
   const courseExclusions = excludedAssignments[ContentState.courseId] || [];
 
@@ -846,7 +893,7 @@ async function handleAssignmentToggle(assignmentId) {
 
   // Recalculate and re-render
   const gradeResult = calculateGradeFromData(ContentState.courseData, courseExclusions);
-  const gradeInfo = convertGradeWithScale(gradeResult.percentage, ContentState.gradingScale);
+  const gradeInfo = convertGradeWithScale(gradeResult.percentage, ContentState.gradingScale, ContentState.gradePoints);
   renderWidget(ContentState.courseData, gradeResult, gradeInfo, ContentState.gradingScale);
 }
 
@@ -1000,15 +1047,28 @@ function setupWidgetEventListeners() {
     });
   }
 
-  // Assignment checkboxes for exclusion
-  widget.querySelectorAll('.cgpa-assignment-checkbox').forEach(checkbox => {
-    checkbox.addEventListener('change', async (e) => {
-      const assignmentId = e.target.dataset.assignmentId;
-      if (assignmentId) {
-        await handleAssignmentToggle(assignmentId);
+  // Assignment checkboxes for exclusion - Use event delegation (single listener)
+  // This avoids adding multiple listeners to each checkbox and prevents memory leaks
+  const assignmentList = widget.querySelector('.cgpa-assignment-list');
+  if (assignmentList) {
+    // Remove old listener if it exists (prevent duplicate listeners on re-renders)
+    if (assignmentList._checkboxListener) {
+      assignmentList.removeEventListener('change', assignmentList._checkboxListener);
+    }
+
+    // Add single delegated listener to parent container
+    const checkboxListener = async (e) => {
+      if (e.target.classList.contains('cgpa-assignment-checkbox')) {
+        const assignmentId = e.target.dataset.assignmentId;
+        if (assignmentId) {
+          await handleAssignmentToggle(assignmentId);
+        }
       }
-    });
-  });
+    };
+
+    assignmentList.addEventListener('change', checkboxListener);
+    assignmentList._checkboxListener = checkboxListener; // Store reference for cleanup
+  }
 }
 
 /**
@@ -1127,6 +1187,13 @@ async function openScaleEditor() {
       return;
     }
 
+    // Validate the grading scale (check for overlaps, gaps, and valid ranges)
+    const errors = GradingScales.validateScale(newScale);
+    if (errors.length > 0) {
+      alert('Invalid grading scale:\n\n' + errors.join('\n'));
+      return;
+    }
+
     // Save to storage
     const { customGradingScales = {} } = await getStoredData(['customGradingScales']);
     customGradingScales[ContentState.courseId] = {
@@ -1178,8 +1245,8 @@ function calculateWhatIf() {
     return;
   }
 
-  // Create modified assignment groups
-  const modifiedGroups = JSON.parse(JSON.stringify(ContentState.courseData.assignmentGroups));
+  // Create modified assignment groups (using structuredClone for better performance)
+  const modifiedGroups = structuredClone(ContentState.courseData.assignmentGroups);
 
   for (const group of modifiedGroups) {
     for (const assignment of group.assignments || []) {
@@ -1197,7 +1264,7 @@ function calculateWhatIf() {
     { ...ContentState.courseData, assignmentGroups: modifiedGroups },
     ContentState.excludedAssignments
   );
-  const newGradeInfo = convertGradeWithScale(newResult.percentage, ContentState.gradingScale);
+  const newGradeInfo = convertGradeWithScale(newResult.percentage, ContentState.gradingScale, ContentState.gradePoints);
 
   // Get current grade for comparison
   const currentResult = calculateGradeFromData(ContentState.courseData, ContentState.excludedAssignments);
@@ -1269,10 +1336,21 @@ function calculateTarget() {
   `;
 }
 
-// Listen for messages from popup
+// Listen for messages from background extension (NOT from page scripts)
+// SECURITY: Verify message comes from extension, not from page context
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // SECURITY: Only accept messages from the extension itself
+  if (sender.id !== chrome.runtime.id) {
+    console.warn('[Canvas GPA] Rejecting message from untrusted sender');
+    sendResponse({ error: 'Untrusted sender' });
+    return;
+  }
+
+  // SECURITY: Only accept whitelisted message types
   if (message.type === 'REFRESH_DATA') {
     loadAndDisplayCourseData(true);
+    sendResponse({ success: true });
+  } else {
+    sendResponse({ error: 'Unknown message type' });
   }
-  sendResponse({ success: true });
 });

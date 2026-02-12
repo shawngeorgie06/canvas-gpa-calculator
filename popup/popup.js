@@ -9,53 +9,26 @@ function isRealSemester(name) {
   return /^(Fall|Spring|Summer|Winter)\s+\d{4}/i.test(name);
 }
 
-// Grading Scale Presets
+// Grading Scale Presets - using constants.js for single source of truth
 const GRADING_SCALES = {
   njit: {
     name: 'NJIT',
-    grades: ['A', 'B+', 'B', 'C+', 'C', 'D', 'F'],
-    points: {
-      'A': 4.0,
-      'B+': 3.5,
-      'B': 3.0,
-      'C+': 2.5,
-      'C': 2.0,
-      'D': 1.0,
-      'F': 0.0
-    }
+    grades: LETTER_GRADES.njit,
+    points: GRADE_POINTS_NJIT
   },
   plusMinus: {
     name: 'Standard Plus/Minus',
-    grades: ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F'],
-    points: {
-      'A': 4.0,
-      'A-': 3.7,
-      'B+': 3.3,
-      'B': 3.0,
-      'B-': 2.7,
-      'C+': 2.3,
-      'C': 2.0,
-      'C-': 1.7,
-      'D+': 1.3,
-      'D': 1.0,
-      'D-': 0.7,
-      'F': 0.0
-    }
+    grades: LETTER_GRADES.plusMinus,
+    points: GRADE_POINTS_PLUS_MINUS
   },
   standard: {
     name: 'Standard',
-    grades: ['A', 'B', 'C', 'D', 'F'],
-    points: {
-      'A': 4.0,
-      'B': 3.0,
-      'C': 2.0,
-      'D': 1.0,
-      'F': 0.0
-    }
+    grades: LETTER_GRADES.standard,
+    points: GRADE_POINTS_STANDARD
   },
   custom: {
     name: 'Custom',
-    grades: ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F'],
+    grades: LETTER_GRADES.plusMinus,
     points: {}
   }
 };
@@ -121,6 +94,7 @@ const elements = {
   previousCredits: document.getElementById('previousCredits'),
   savePreviousGPA: document.getElementById('savePreviousGPA'),
   clearCache: document.getElementById('clearCache'),
+  resetSemesters: document.getElementById('resetSemesters'),
   exportData: document.getElementById('exportData'),
   clearAllData: document.getElementById('clearAllData')
 };
@@ -294,15 +268,27 @@ function updateScalePreview() {
   const grades = currentGradingScale.grades;
   const points = currentGradingScale.points;
 
-  const gradeItems = grades
-    .filter(g => points[g] !== undefined)
-    .map(g => `<span class="scale-preview-item">${g}=${points[g].toFixed(1)}</span>`)
-    .join('');
+  // SECURITY: Use safe DOM construction instead of innerHTML
+  preview.innerHTML = '';
 
-  preview.innerHTML = `
-    <div class="scale-preview-title">Current Scale: ${currentGradingScale.name}</div>
-    <div class="scale-preview-grades">${gradeItems}</div>
-  `;
+  const title = document.createElement('div');
+  title.className = 'scale-preview-title';
+  title.textContent = `Current Scale: ${currentGradingScale.name}`;
+  preview.appendChild(title);
+
+  const gradesDiv = document.createElement('div');
+  gradesDiv.className = 'scale-preview-grades';
+
+  grades
+    .filter(g => points[g] !== undefined)
+    .forEach(g => {
+      const span = document.createElement('span');
+      span.className = 'scale-preview-item';
+      span.textContent = `${g}=${points[g].toFixed(1)}`;
+      gradesDiv.appendChild(span);
+    });
+
+  preview.appendChild(gradesDiv);
 }
 
 /**
@@ -405,11 +391,36 @@ function setupEventListeners() {
   // Refresh button
   elements.refreshBtn.addEventListener('click', async () => {
     if (state.isConnected) {
-      await Storage.clearCache();
-      await loadCoursesData();
-      // Update sync time on manual refresh
-      await Storage.set({ lastSyncTime: Date.now() });
-      await updateLastSyncInfo();
+      console.log('[GPA Popup] Manual refresh clicked - triggering background worker');
+      elements.refreshBtn.disabled = true;
+      elements.refreshBtn.classList.add('loading');
+
+      try {
+        // Trigger background worker refresh FIRST to fetch fresh grades
+        console.log('[GPA Popup] Sending REFRESH_DATA message to background worker');
+        const result = await chrome.runtime.sendMessage({ type: 'REFRESH_DATA' });
+        console.log('[GPA Popup] Background refresh response:', result);
+
+        // Wait a moment for background worker to update storage
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // THEN clear cache and reload popup with fresh data
+        console.log('[GPA Popup] Clearing cache and reloading courses...');
+        await Storage.clearCache();
+        await loadCoursesData();
+
+        // Update sync time on manual refresh
+        await Storage.set({ lastSyncTime: Date.now() });
+        await updateLastSyncInfo();
+
+        console.log('[GPA Popup] Refresh complete - grades updated');
+      } catch (error) {
+        console.error('[GPA Popup] Error during refresh:', error);
+        showStatus('error', 'Refresh failed. Please try again.');
+      } finally {
+        elements.refreshBtn.disabled = false;
+        elements.refreshBtn.classList.remove('loading');
+      }
     }
   });
 
@@ -502,6 +513,16 @@ function setupEventListeners() {
     showTestResult('success', 'Cache cleared successfully');
   });
 
+  elements.resetSemesters.addEventListener('click', async () => {
+    await chrome.storage.local.set({
+      detectedSemesters: [],
+      upcomingSemesters: [],
+      excludedSemesters: []
+    });
+    await Storage.clearCache();
+    showTestResult('success', 'Semester detection reset. Click refresh to re-scan.');
+  });
+
   elements.exportData.addEventListener('click', exportData);
 
   elements.clearAllData.addEventListener('click', async () => {
@@ -547,16 +568,34 @@ async function updateLastSyncInfo() {
     const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const dateStr = date.toLocaleDateString();
 
-    let html = `Last synced: <span class="sync-time">${timeStr}</span>`;
-    html += ` <span class="auto-sync-badge">Auto-sync ON</span>`;
+    // SECURITY: Use safe DOM construction instead of innerHTML
+    syncInfoEl.innerHTML = '';
+
+    // Add main sync info
+    const mainText = document.createElement('span');
+    mainText.textContent = 'Last synced: ';
+    syncInfoEl.appendChild(mainText);
+
+    const syncTime = document.createElement('span');
+    syncTime.className = 'sync-time';
+    syncTime.textContent = timeStr;
+    syncInfoEl.appendChild(syncTime);
+
+    const badge = document.createElement('span');
+    badge.className = 'auto-sync-badge';
+    badge.textContent = 'Auto-sync ON';
+    syncInfoEl.appendChild(badge);
 
     if (upcomingSemesters.length > 0) {
-      html += `<br><small>${upcomingSemesters.join(', ')} auto-excluded from cumulative</small>`;
-    }
+      const br = document.createElement('br');
+      syncInfoEl.appendChild(br);
 
-    syncInfoEl.innerHTML = html;
+      const info = document.createElement('small');
+      info.textContent = `${upcomingSemesters.join(', ')} auto-excluded from cumulative`;
+      syncInfoEl.appendChild(info);
+    }
   } else {
-    syncInfoEl.innerHTML = 'Auto-sync: Every 15 minutes';
+    syncInfoEl.textContent = 'Auto-sync: Every 15 minutes';
   }
 }
 
@@ -590,9 +629,73 @@ async function loadCoursesData() {
     // Get custom course data from storage
     const { customCourseData = {} } = await Storage.get('customCourseData');
 
-    // Process each course with grading scale detection
+    // Process each course with grading scale detection and grade calculation from assignments
     const processedCourses = await Promise.all(
       courses.map(async (course) => {
+        // Fetch assignment groups from background worker to calculate grade
+        let calculatedGrade = null;
+        let gradeSource = 'custom';
+
+        try {
+          const groupsResponse = await new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage(
+              { type: 'GET_ASSIGNMENT_GROUPS', courseId: course.id },
+              (response) => {
+                if (chrome.runtime.lastError) {
+                  reject(new Error(chrome.runtime.lastError.message));
+                } else if (response?.error) {
+                  reject(new Error(response.error));
+                } else {
+                  resolve(response);
+                }
+              }
+            );
+          });
+
+          const groups = groupsResponse?.groups || [];
+          if (groups.length > 0) {
+            // Calculate grade from assignments
+            const gradeResult = GradeCalculator.calculateCourseGrade(groups, { includeUngraded: false });
+            if (gradeResult?.percentage !== null) {
+              calculatedGrade = gradeResult.percentage;
+              gradeSource = 'assignments';
+            }
+          }
+        } catch (error) {
+          console.warn(`[GPA Calc] Failed to fetch assignment groups for course ${course.id}:`, error.message);
+        }
+
+        // If assignment calculation failed, try enrollment
+        if (calculatedGrade === null) {
+          try {
+            const enrollmentArray = await new Promise((resolve, reject) => {
+              chrome.runtime.sendMessage(
+                { type: 'GET_ENROLLMENTS', courseId: course.id },
+                (response) => {
+                  if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                  } else if (response?.error) {
+                    reject(new Error(response.error));
+                  } else {
+                    resolve(response);
+                  }
+                }
+              );
+            });
+            const enrollmentData = Array.isArray(enrollmentArray) ? enrollmentArray[0] : enrollmentArray;
+
+            // Use final score if available, otherwise current score
+            const finalScore = enrollmentData?.grades?.final_score;
+            const currentScore = enrollmentData?.grades?.current_score;
+            calculatedGrade = finalScore !== null ? finalScore : currentScore;
+            if (calculatedGrade !== null) {
+              gradeSource = 'enrollment';
+            }
+          } catch (error) {
+            console.warn(`[GPA Calc] Failed to fetch enrollment for course ${course.id}:`, error.message);
+          }
+        }
+
         const gradingScale = await GradingScaleDetector.getGradingScale(course.id, {
           canvasApi: CanvasAPI,
           storage: Storage
@@ -600,32 +703,22 @@ async function loadCoursesData() {
 
         const customData = customCourseData[course.id];
 
-        // Priority: 1. Custom data, 2. Canvas letter grade, 3. Calculated from percentage
+        // Convert calculated grade to letter grade
         let letterGrade;
         let gradePoints;
-        let gradeSource = 'calculated';
         let credits = course.credits || estimateCreditHours(course);
         let term = course.term;
 
-        // Check for user's custom data first
-        if (customData) {
+        // Check custom data first (user overrides take priority)
+        if (customData && customData.letterGrade) {
           letterGrade = customData.letterGrade;
           gradePoints = customData.gradePoints;
           credits = customData.credits || credits;
           term = customData.term || term;
           gradeSource = 'custom';
-        }
-        // Then check Canvas letter grade (transcript)
-        else if (course.letterGrade) {
-          letterGrade = course.letterGrade;
-          gradePoints = getGradePoints(letterGrade);
-          gradeSource = 'canvas';
-        }
-        // Fall back to calculating from percentage
-        else {
-          const gradeInfo = GradingScaleDetector.getGradeInfo(course.currentGrade, gradingScale);
+        } else if (calculatedGrade !== null) {
+          const gradeInfo = GradingScaleDetector.getGradeInfo(calculatedGrade, gradingScale);
           letterGrade = gradeInfo.letterGrade;
-          // Use selected grading scale for GPA points
           gradePoints = getGradePoints(letterGrade);
           gradeSource = 'calculated';
         }
@@ -636,9 +729,9 @@ async function loadCoursesData() {
           term: term || null,
           letterGrade: letterGrade || null,
           gradePoints: gradePoints != null ? gradePoints : null,
-          calculatedGrade: course.currentGrade != null ? course.currentGrade : null,
+          calculatedGrade: calculatedGrade,
           gradingScale,
-          gradeSource // 'custom', 'canvas', or 'calculated'
+          gradeSource // 'assignments', 'enrollment', or 'custom'
         };
       })
     );
@@ -1281,33 +1374,33 @@ function isFutureSemester(termName) {
 
   const season = match[1].toLowerCase();
 
-  // Semester END months (when grades are finalized)
-  // A semester is "not completed" if we haven't passed its end month
-  const seasonEndMonth = {
-    winter: 1,   // Winter ends ~February
-    spring: 5,   // Spring ends ~May/June
-    summer: 8,   // Summer ends ~August
-    fall: 12     // Fall ends ~December (use 12 so Dec of same year counts as completed)
+  // Semester START months (when the semester begins)
+  // A semester is "future/upcoming" if it hasn't started yet
+  const seasonStartMonth = {
+    winter: 1,   // Winter starts ~January
+    spring: 1,   // Spring starts ~January
+    summer: 5,   // Summer starts ~May
+    fall: 8      // Fall starts ~August
   };
 
-  const semesterEndMonth = seasonEndMonth[season] ?? 12;
+  const semesterStartMonth = seasonStartMonth[season] ?? 1;
+  const currentMonthAdjusted = currentMonth + 1; // Convert from 0-indexed to 1-indexed
 
-  console.log(`[GPA Calc] Checking ${termName}: year=${year}, season=${season}, endMonth=${semesterEndMonth}, currentYear=${currentYear}, currentMonth=${currentMonth + 1}`);
+  console.log(`[GPA Calc] Checking ${termName}: year=${year}, season=${season}, startMonth=${semesterStartMonth}, currentYear=${currentYear}, currentMonth=${currentMonthAdjusted}`);
 
   // If semester year is greater than current year, it's future
   if (year > currentYear) {
-    console.log(`[GPA Calc] ${termName} is NOT COMPLETED (future year)`);
+    console.log(`[GPA Calc] ${termName} is FUTURE (future year)`);
     return true;
   }
 
-  // If same year, check if semester hasn't ended yet
-  // currentMonth is 0-indexed, so January = 0
-  if (year === currentYear && semesterEndMonth > (currentMonth + 1)) {
-    console.log(`[GPA Calc] ${termName} is NOT COMPLETED (in progress)`);
+  // If same year, check if semester hasn't started yet
+  if (year === currentYear && semesterStartMonth > currentMonthAdjusted) {
+    console.log(`[GPA Calc] ${termName} is FUTURE (hasn't started yet)`);
     return true;
   }
 
-  console.log(`[GPA Calc] ${termName} is COMPLETED`);
+  console.log(`[GPA Calc] ${termName} is CURRENT or PAST (include in cumulative GPA)`);
   return false;
 }
 
@@ -1525,26 +1618,39 @@ async function updateManualCourse(courseId, name, letterGrade, credits, term) {
  * Save custom course data (grade, credits, term)
  */
 async function saveCustomCourseData(courseId, letterGrade, credits, term) {
-  // Get existing custom data
-  const { customCourseData = {} } = await Storage.get('customCourseData');
+  try {
+    console.log(`[GPA Calc] Saving course ${courseId}: grade=${letterGrade}, credits=${credits}, term=${term}`);
 
-  // Handle N/A grade - no grade points (use current grading scale)
-  const isNA = letterGrade === 'N/A' || letterGrade === 'NA' || !letterGrade;
-  const gradePointsValue = isNA ? null : getGradePoints(letterGrade);
+    // Get existing custom data
+    const { customCourseData = {} } = await Storage.get('customCourseData');
+    console.log('[GPA Calc] Current customCourseData:', customCourseData);
 
-  customCourseData[courseId] = {
-    letterGrade: isNA ? 'N/A' : letterGrade,
-    gradePoints: gradePointsValue,
-    credits,
-    term,
-    lastUpdated: new Date().toISOString()
-  };
+    // Handle N/A grade - no grade points (use current grading scale)
+    const isNA = letterGrade === 'N/A' || letterGrade === 'NA' || !letterGrade;
+    const gradePointsValue = isNA ? null : getGradePoints(letterGrade);
 
-  await Storage.set({ customCourseData });
+    customCourseData[courseId] = {
+      letterGrade: isNA ? 'N/A' : letterGrade,
+      gradePoints: gradePointsValue,
+      credits,
+      term,
+      lastUpdated: new Date().toISOString()
+    };
 
-  // Reload to apply changes
-  await loadCoursesData();
-  showStatus('success', 'Course updated');
+    console.log('[GPA Calc] Updated customCourseData:', customCourseData);
+
+    const result = await Storage.set({ customCourseData });
+    console.log('[GPA Calc] Storage.set() result:', result);
+
+    // Reload to apply changes
+    console.log('[GPA Calc] Reloading courses data...');
+    await loadCoursesData();
+    console.log('[GPA Calc] Courses reloaded successfully');
+    showStatus('success', 'Course updated');
+  } catch (error) {
+    console.error('[GPA Calc] Error saving course:', error);
+    showStatus('error', 'Failed to save course: ' + error.message);
+  }
 }
 
 /**
@@ -1907,26 +2013,53 @@ async function saveConnection() {
     return;
   }
 
-  // Don't save masked token
-  if (token && !token.includes('•')) {
-    await Storage.setApiToken(token);
-  }
-  await Storage.setBaseUrl(url);
+  // SECURITY: Validate Canvas URL format and domain
+  try {
+    const urlObj = new URL(url);
 
-  // Test and connect
-  const savedToken = await Storage.getApiToken();
-  if (savedToken) {
-    await CanvasAPI.init(savedToken, url);
-    const isValid = await CanvasAPI.verifyToken();
-
-    if (isValid) {
-      state.isConnected = true;
-      showTestResult('success', 'Connected successfully!');
-      showStatus('success', 'Connected to Canvas');
-      await loadCoursesData();
-    } else {
-      showTestResult('error', 'Invalid token. Please check and try again.');
+    // Must use HTTPS
+    if (urlObj.protocol !== 'https:') {
+      showTestResult('error', 'Canvas URL must use HTTPS (https://...)');
+      return;
     }
+
+    // Must be a Canvas instance (.instructure.com)
+    if (!urlObj.hostname.includes('instructure.com')) {
+      showTestResult('error', 'Must be a valid Canvas instance URL (e.g., https://your-school.instructure.com)');
+      return;
+    }
+  } catch (error) {
+    showTestResult('error', 'Invalid URL format. Use: https://your-school.instructure.com');
+    return;
+  }
+
+  try {
+    // Don't save masked token
+    if (token && !token.includes('•')) {
+      await Storage.setApiToken(token);
+    }
+    await Storage.setBaseUrl(url);
+
+    // Test and connect
+    const savedToken = await Storage.getApiToken();
+    if (savedToken) {
+      await CanvasAPI.init(savedToken, url);
+      const isValid = await CanvasAPI.verifyToken();
+
+      if (isValid) {
+        state.isConnected = true;
+        showTestResult('success', 'Connected successfully!');
+        showStatus('success', 'Connected to Canvas');
+        await loadCoursesData();
+      } else {
+        showTestResult('error', 'Invalid token. Please check and try again.');
+      }
+    } else {
+      showTestResult('error', 'No token was entered. Please paste your Canvas API token.');
+    }
+  } catch (error) {
+    console.error('[Canvas GPA] Save connection error:', error);
+    showTestResult('error', `Connection error: ${error.message}`);
   }
 }
 
@@ -1937,18 +2070,39 @@ async function testConnection() {
   const url = elements.canvasUrl.value.trim();
   const token = elements.apiToken.value.trim();
 
+  console.log('[Canvas GPA] Test connection initiated');
+  console.log('[Canvas GPA] URL:', url);
+  console.log('[Canvas GPA] Token length:', token.length);
+
   if (!url || !token || token.includes('•')) {
     showTestResult('error', 'Please enter both URL and token');
     return;
   }
 
-  await CanvasAPI.init(token, url);
-  const isValid = await CanvasAPI.verifyToken();
+  // Validate URL format
+  if (!url.startsWith('https://') && !url.startsWith('http://')) {
+    showTestResult('error', 'Canvas URL must start with https:// (e.g., https://njit.instructure.com)');
+    return;
+  }
 
-  if (isValid) {
-    showTestResult('success', 'Connection successful! You can save these settings.');
-  } else {
-    showTestResult('error', 'Connection failed. Please check your URL and token.');
+  try {
+    console.log('[Canvas GPA] Initializing CanvasAPI...');
+    await CanvasAPI.init(token, url);
+    console.log('[Canvas GPA] CanvasAPI initialized. Verifying token...');
+    const isValid = await CanvasAPI.verifyToken();
+
+    if (isValid) {
+      console.log('[Canvas GPA] Token verified successfully');
+      showTestResult('success', 'Connection successful! You can save these settings.');
+    } else {
+      console.log('[Canvas GPA] Token verification returned false');
+      showTestResult('error', 'Token is invalid or expired. Please check Canvas account settings and generate a new token.');
+    }
+  } catch (error) {
+    console.error('[Canvas GPA] Connection test error:', error);
+    console.error('[Canvas GPA] Error message:', error.message);
+    console.error('[Canvas GPA] Full error:', error);
+    showTestResult('error', `Connection error: ${error.message}`);
   }
 }
 
@@ -1977,13 +2131,60 @@ async function savePreviousGPA() {
  * Export all data
  */
 async function exportData() {
-  const data = await Storage.get(null);
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  // SECURITY: Show confirmation before exporting data
+  if (!confirm('Export data?\n\nNote: Only non-sensitive data will be exported (no API tokens or credentials)')) {
+    return;
+  }
+
+  const allData = await Storage.get(null);
+
+  // SECURITY: Filter out sensitive data before exporting
+  const exportData = {};
+
+  // Allow exporting non-sensitive fields
+  const allowedFields = [
+    'previousGPA',
+    'previousCredits',
+    'currentSemester',
+    'customGradingScales',
+    'excludedAssignments',
+    'widgetVisible',
+    'settings',
+    'cache',
+    'darkMode',
+    'excludedSemesters',
+    'customCourseData',
+    'manualCourses',
+    'excludedCourses',
+    'semesterGPAOverrides',
+    'semesterCreditOverrides',
+    'cumulativeGPAOverride',
+    'cumulativeCreditOverride',
+    'lastSyncTime',
+    'detectedSemesters',
+    'upcomingSemesters'
+  ];
+
+  for (const field of allowedFields) {
+    if (field in allData) {
+      exportData[field] = allData[field];
+    }
+  }
+
+  // SECURITY: Remove encrypted tokens from customGradingScales if present
+  if (exportData.customGradingScales) {
+    for (const courseId in exportData.customGradingScales) {
+      delete exportData.customGradingScales[courseId].userNotes;  // Remove any notes that might contain sensitive info
+    }
+  }
+
+  const exportDate = new Date().toISOString().slice(0, 10);
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'canvas-gpa-data.json';
+  a.download = `canvas-gpa-data-${exportDate}.json`;
   a.click();
 
   URL.revokeObjectURL(url);

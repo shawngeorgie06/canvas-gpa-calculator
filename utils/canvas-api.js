@@ -8,6 +8,7 @@ const CanvasAPI = {
   baseUrl: null,
   rateLimitRemaining: 700,
   rateLimitResetTime: null,
+  lastRequestTime: null, // SECURITY: For local rate limiting
 
   /**
    * Initialize the API with token and base URL
@@ -34,13 +35,21 @@ const CanvasAPI = {
       throw new Error('Canvas base URL not configured. Please set up your Canvas URL in the extension settings.');
     }
 
-    // Check rate limiting
+    // Check Canvas API rate limiting (respect server limits)
     if (this.rateLimitRemaining <= 10 && this.rateLimitResetTime) {
       const waitTime = this.rateLimitResetTime - Date.now();
       if (waitTime > 0) {
         await this.sleep(waitTime);
       }
     }
+
+    // SECURITY: Local rate limiting - max 10 requests per second
+    const now = Date.now();
+    if (this.lastRequestTime && (now - this.lastRequestTime) < 100) {
+      const waitTime = 100 - (now - this.lastRequestTime);
+      await this.sleep(waitTime);
+    }
+    this.lastRequestTime = Date.now();
 
     const url = `${this.baseUrl}${endpoint}`;
     const fetchOptions = {
@@ -53,6 +62,7 @@ const CanvasAPI = {
     };
 
     try {
+      console.log('[Canvas GPA] Attempting to fetch:', url);
       const response = await fetch(url, fetchOptions);
 
       // Update rate limit info from headers
@@ -99,7 +109,13 @@ const CanvasAPI = {
           error.message.startsWith('API_ERROR')) {
         throw error;
       }
-      throw new Error(`NETWORK_ERROR: Failed to connect to Canvas. ${error.message}`);
+
+      // Provide helpful error message for network failures
+      let message = error.message;
+      if (error.message === 'Failed to fetch') {
+        message = `Cannot reach Canvas at "${this.baseUrl}". Check that: (1) URL is correct (2) Canvas is accessible in your browser (3) No typos in the domain`;
+      }
+      throw new Error(`NETWORK_ERROR: ${message}`);
     }
   },
 
@@ -323,7 +339,7 @@ const CanvasAPI = {
    */
   async getEnrollment(courseId) {
     const enrollments = await this.request(
-      `/api/v1/courses/${courseId}/enrollments?user_id=self&include[]=current_grading_period_scores`
+      `/api/v1/courses/${courseId}/enrollments?user_id=self`
     );
     return enrollments?.[0] || null;
   },
@@ -347,7 +363,8 @@ const CanvasAPI = {
       await this.getCurrentUser();
       return true;
     } catch (error) {
-      return false;
+      console.error('[Canvas GPA] Token verification failed:', error.message);
+      throw error;  // Let caller handle the error
     }
   },
 
@@ -384,72 +401,46 @@ const CanvasAPI = {
 
   /**
    * Get all courses with their grading data
-   * @returns {Promise<array>} All courses with grades
+   * NOTE: This just returns course list without grade details.
+   * Grade calculation happens in popup.js after fetching from background worker.
+   * @returns {Promise<array>} All courses (grades will be fetched separately)
    */
   async getAllCoursesWithGrades() {
     const courses = await this.getCourses();
 
-    console.log('[Canvas API] Raw courses from API:', courses);
+    console.log('[Canvas API] Raw courses from API - returning without grade details');
 
-    const coursesWithGrades = await Promise.all(
-      courses.map(async (course) => {
-        try {
-          const enrollment = await this.getEnrollment(course.id);
-          const gradingStandard = await this.getActiveGradingStandard(course.id);
+    // Return courses without attempting to fetch enrollment data here
+    // This avoids the rate limiting and API call issues
+    const coursesWithGrades = courses.map(course => {
+      // Try multiple ways to get term name
+      let termName = null;
+      if (course.term && course.term.name) {
+        termName = course.term.name;
+      } else if (course.enrollment_term_id) {
+        termName = `Term ${course.enrollment_term_id}`;
+      }
 
-          // Try multiple ways to get term name
-          let termName = null;
-          if (course.term && course.term.name) {
-            termName = course.term.name;
-          } else if (course.enrollment_term_id) {
-            termName = `Term ${course.enrollment_term_id}`;
-          }
-
-          // Try to extract term from course name (e.g., "CS 101 - Fall 2024")
-          if (!termName) {
-            const termMatch = course.name.match(/(Fall|Spring|Summer|Winter)\s*'?\d{2,4}/i);
-            if (termMatch) {
-              termName = termMatch[0];
-            }
-          }
-
-          // Use FINAL grade if available (for completed courses), otherwise current grade
-          // This matches what appears on transcript
-          const finalScore = enrollment?.grades?.final_score;
-          const currentScore = enrollment?.grades?.current_score;
-          const finalLetterGrade = enrollment?.grades?.final_grade;
-          const currentLetterGrade = enrollment?.grades?.current_grade;
-
-          // Prefer final grade (transcript grade) over current grade
-          const gradeScore = finalScore !== null ? finalScore : currentScore;
-          const letterGrade = finalLetterGrade || currentLetterGrade;
-
-          console.log('[Canvas API] Course:', course.name, '| Final:', finalLetterGrade, '| Current:', currentLetterGrade);
-
-          return {
-            id: course.id,
-            name: course.name,
-            code: course.course_code,
-            term: termName,
-            currentGrade: gradeScore,
-            finalGrade: finalScore,
-            letterGrade: letterGrade, // This is the transcript grade
-            isCompleted: course.workflow_state === 'completed' || course.concluded,
-            gradingStandard
-          };
-        } catch (error) {
-          console.warn(`Error fetching grade data for course ${course.id}:`, error);
-          return {
-            id: course.id,
-            name: course.name,
-            code: course.course_code,
-            term: course.term?.name,
-            currentGrade: null,
-            error: error.message
-          };
+      // Try to extract term from course name (e.g., "CS 101 - Fall 2024")
+      if (!termName && course.name) {
+        const termMatch = course.name.match(/(Fall|Spring|Summer|Winter)\s*'?\d{2,4}/i);
+        if (termMatch) {
+          termName = termMatch[0];
         }
-      })
-    );
+      }
+
+      return {
+        id: course.id,
+        name: course.name,
+        code: course.course_code,
+        term: termName,
+        currentGrade: null, // Will be filled in by popup.js from background worker
+        finalGrade: null,
+        letterGrade: null,
+        isCompleted: course.workflow_state === 'completed' || course.concluded,
+        gradingStandard: null
+      };
+    });
 
     return coursesWithGrades;
   }
