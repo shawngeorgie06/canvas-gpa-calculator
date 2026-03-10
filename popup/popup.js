@@ -9,26 +9,53 @@ function isRealSemester(name) {
   return /^(Fall|Spring|Summer|Winter)\s+\d{4}/i.test(name);
 }
 
-// Grading Scale Presets - using constants.js for single source of truth
+// Grading Scale Presets
 const GRADING_SCALES = {
   njit: {
     name: 'NJIT',
-    grades: LETTER_GRADES.njit,
-    points: GRADE_POINTS_NJIT
+    grades: ['A', 'B+', 'B', 'C+', 'C', 'D', 'F'],
+    points: {
+      'A': 4.0,
+      'B+': 3.5,
+      'B': 3.0,
+      'C+': 2.5,
+      'C': 2.0,
+      'D': 1.0,
+      'F': 0.0
+    }
   },
   plusMinus: {
     name: 'Standard Plus/Minus',
-    grades: LETTER_GRADES.plusMinus,
-    points: GRADE_POINTS_PLUS_MINUS
+    grades: ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F'],
+    points: {
+      'A': 4.0,
+      'A-': 3.7,
+      'B+': 3.3,
+      'B': 3.0,
+      'B-': 2.7,
+      'C+': 2.3,
+      'C': 2.0,
+      'C-': 1.7,
+      'D+': 1.3,
+      'D': 1.0,
+      'D-': 0.7,
+      'F': 0.0
+    }
   },
   standard: {
     name: 'Standard',
-    grades: LETTER_GRADES.standard,
-    points: GRADE_POINTS_STANDARD
+    grades: ['A', 'B', 'C', 'D', 'F'],
+    points: {
+      'A': 4.0,
+      'B': 3.0,
+      'C': 2.0,
+      'D': 1.0,
+      'F': 0.0
+    }
   },
   custom: {
     name: 'Custom',
-    grades: LETTER_GRADES.plusMinus,
+    grades: ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F'],
     points: {}
   }
 };
@@ -297,6 +324,23 @@ function updateScalePreview() {
 function getGradePoints(letterGrade) {
   if (!letterGrade || letterGrade === 'N/A') return null;
   return currentGradingScale.points[letterGrade] ?? null;
+}
+
+/**
+ * Convert numeric grade to letter grade
+ */
+function convertGradeToLetter(percentage, gradeScale) {
+  if (percentage === null || percentage === undefined) return 'N/A';
+
+  // Use the current grading scale to find matching letter grade
+  const scale = gradeScale || currentGradingScale.points;
+
+  // Standard 10-point scale fallback
+  if (percentage >= 90) return 'A';
+  if (percentage >= 80) return 'B';
+  if (percentage >= 70) return 'C';
+  if (percentage >= 60) return 'D';
+  return 'F';
 }
 
 /**
@@ -629,112 +673,54 @@ async function loadCoursesData() {
     // Get custom course data from storage
     const { customCourseData = {} } = await Storage.get('customCourseData');
 
-    // Process each course with grading scale detection and grade calculation from assignments
-    const processedCourses = await Promise.all(
-      courses.map(async (course) => {
-        // Fetch assignment groups from background worker to calculate grade
-        let calculatedGrade = null;
-        let gradeSource = 'custom';
+    // Process courses with minimal API calls (use already-fetched data)
+    const processedCourses = courses.map((course) => {
+      const customData = customCourseData[course.id];
+      let letterGrade = null;
+      let gradePoints = null;
+      let calculatedGrade = null;
+      let gradeSource = 'none';
 
-        try {
-          const groupsResponse = await new Promise((resolve, reject) => {
-            chrome.runtime.sendMessage(
-              { type: 'GET_ASSIGNMENT_GROUPS', courseId: course.id },
-              (response) => {
-                if (chrome.runtime.lastError) {
-                  reject(new Error(chrome.runtime.lastError.message));
-                } else if (response?.error) {
-                  reject(new Error(response.error));
-                } else {
-                  resolve(response);
-                }
-              }
-            );
-          });
+      // Priority: Custom override > Canvas letter grade > Canvas numeric grade (prefer final over current)
+      if (customData && customData.letterGrade) {
+        letterGrade = customData.letterGrade;
+        gradePoints = customData.gradePoints;
+        gradeSource = 'custom';
+      } else if (course.letterGrade) {
+        // Use Canvas letter grade directly
+        letterGrade = course.letterGrade;
+        gradePoints = getGradePoints(letterGrade);
+        calculatedGrade = course.currentGrade ?? course.finalGrade;
+        gradeSource = 'canvas';
+      } else if (course.currentGrade !== null && course.currentGrade !== undefined) {
+        // Use current grade (matches Canvas UI display)
+        calculatedGrade = course.currentGrade;
+        const gradingScale = course.gradingScale || GRADING_SCALES.njit;
+        letterGrade = convertGradeToLetter(calculatedGrade, gradingScale.points);
+        gradePoints = getGradePoints(letterGrade);
+        gradeSource = 'calculated';
+      } else if (course.finalGrade !== null && course.finalGrade !== undefined) {
+        // Fall back to final grade if current not available
+        calculatedGrade = course.finalGrade;
+        const gradingScale = course.gradingScale || GRADING_SCALES.njit;
+        letterGrade = convertGradeToLetter(calculatedGrade, gradingScale.points);
+        gradePoints = getGradePoints(letterGrade);
+        gradeSource = 'calculated';
+      }
 
-          const groups = groupsResponse?.groups || [];
-          if (groups.length > 0) {
-            // Calculate grade from assignments
-            const gradeResult = GradeCalculator.calculateCourseGrade(groups, { includeUngraded: false });
-            if (gradeResult?.percentage !== null) {
-              calculatedGrade = gradeResult.percentage;
-              gradeSource = 'assignments';
-            }
-          }
-        } catch (error) {
-          console.warn(`[GPA Calc] Failed to fetch assignment groups for course ${course.id}:`, error.message);
-        }
+      const credits = customData?.credits || course.credits || estimateCreditHours(course) || 3;
+      const term = customData?.term || course.term;
 
-        // If assignment calculation failed, try enrollment
-        if (calculatedGrade === null) {
-          try {
-            const enrollmentArray = await new Promise((resolve, reject) => {
-              chrome.runtime.sendMessage(
-                { type: 'GET_ENROLLMENTS', courseId: course.id },
-                (response) => {
-                  if (chrome.runtime.lastError) {
-                    reject(new Error(chrome.runtime.lastError.message));
-                  } else if (response?.error) {
-                    reject(new Error(response.error));
-                  } else {
-                    resolve(response);
-                  }
-                }
-              );
-            });
-            const enrollmentData = Array.isArray(enrollmentArray) ? enrollmentArray[0] : enrollmentArray;
-
-            // Use final score if available, otherwise current score
-            const finalScore = enrollmentData?.grades?.final_score;
-            const currentScore = enrollmentData?.grades?.current_score;
-            calculatedGrade = finalScore !== null ? finalScore : currentScore;
-            if (calculatedGrade !== null) {
-              gradeSource = 'enrollment';
-            }
-          } catch (error) {
-            console.warn(`[GPA Calc] Failed to fetch enrollment for course ${course.id}:`, error.message);
-          }
-        }
-
-        const gradingScale = await GradingScaleDetector.getGradingScale(course.id, {
-          canvasApi: CanvasAPI,
-          storage: Storage
-        });
-
-        const customData = customCourseData[course.id];
-
-        // Convert calculated grade to letter grade
-        let letterGrade;
-        let gradePoints;
-        let credits = course.credits || estimateCreditHours(course);
-        let term = course.term;
-
-        // Check custom data first (user overrides take priority)
-        if (customData && customData.letterGrade) {
-          letterGrade = customData.letterGrade;
-          gradePoints = customData.gradePoints;
-          credits = customData.credits || credits;
-          term = customData.term || term;
-          gradeSource = 'custom';
-        } else if (calculatedGrade !== null) {
-          const gradeInfo = GradingScaleDetector.getGradeInfo(calculatedGrade, gradingScale);
-          letterGrade = gradeInfo.letterGrade;
-          gradePoints = getGradePoints(letterGrade);
-          gradeSource = 'calculated';
-        }
-
-        return {
-          ...course,
-          credits: credits || 3,
-          term: term || null,
-          letterGrade: letterGrade || null,
-          gradePoints: gradePoints != null ? gradePoints : null,
-          calculatedGrade: calculatedGrade,
-          gradingScale,
-          gradeSource // 'assignments', 'enrollment', or 'custom'
-        };
-      })
-    );
+      return {
+        ...course,
+        credits,
+        term: term || null,
+        letterGrade: letterGrade,
+        gradePoints: gradePoints,
+        calculatedGrade,
+        gradeSource
+      };
+    });
 
     // Add manual courses from storage
     const { manualCourses = [] } = await Storage.get('manualCourses');
@@ -2068,14 +2054,24 @@ async function saveConnection() {
  */
 async function testConnection() {
   const url = elements.canvasUrl.value.trim();
-  const token = elements.apiToken.value.trim();
+  let token = elements.apiToken.value.trim();
 
   console.log('[Canvas GPA] Test connection initiated');
   console.log('[Canvas GPA] URL:', url);
   console.log('[Canvas GPA] Token length:', token.length);
 
-  if (!url || !token || token.includes('•')) {
-    showTestResult('error', 'Please enter both URL and token');
+  if (!url) {
+    showTestResult('error', 'Please enter Canvas URL');
+    return;
+  }
+
+  // If token field is masked, use the saved token instead
+  if (token.includes('•') || !token) {
+    token = await Storage.getApiToken();
+  }
+
+  if (!token) {
+    showTestResult('error', 'Please enter your Canvas API token');
     return;
   }
 

@@ -8,7 +8,15 @@ const ContentState = {
   courseId: null,
   courseData: null,
   gradingScale: null,
-  gradePoints: GRADE_POINTS_NJIT,  // Default to NJIT, will be updated from storage
+  gradePoints: {
+    'A': 4.0,
+    'B+': 3.5,
+    'B': 3.0,
+    'C+': 2.5,
+    'C': 2.0,
+    'D': 1.0,
+    'F': 0.0
+  },  // Default to NJIT, will be updated from storage
   excludedAssignments: [],
   isInitialized: false,
   widgetContainer: null,
@@ -134,8 +142,14 @@ function waitForCanvasLoad(timeout = 5000) {
  */
 async function checkConfiguration() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['canvasApiTokenEncrypted', 'canvasBaseUrl'], (result) => {
-      resolve(Boolean(result.canvasApiTokenEncrypted && result.canvasBaseUrl));
+    // Check for token (either encrypted or plain) and base URL
+    chrome.storage.local.get(['canvasApiToken', 'canvasApiTokenEncrypted', 'canvasBaseUrl'], (result) => {
+      const hasToken = result.canvasApiToken || result.canvasApiTokenEncrypted;
+      const hasUrl = result.canvasBaseUrl;
+      const isConfigured = Boolean(hasToken && hasUrl);
+
+      console.log('[Canvas GPA] Configuration check - Token:', hasToken ? 'EXISTS' : 'MISSING', 'URL:', hasUrl ? 'EXISTS' : 'MISSING', 'Configured:', isConfigured);
+      resolve(isConfigured);
     });
   });
 }
@@ -362,35 +376,40 @@ async function loadAndDisplayCourseData(forceRefresh = false) {
   const content = ContentState.widgetContainer.querySelector('.cgpa-content');
   content.innerHTML = '<div class="cgpa-loading">Loading...</div>';
 
+  console.log('[Canvas GPA Widget] Starting to load course data');
+
   try {
-    // Check if configured by asking background worker (doesn't expose token)
-    let isConfigured = false;
+    // Add timeout wrapper for all async operations
+    const timeout = (promise, ms = 5000) => Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout')), ms))
+    ]);
+
+    // Fetch course data with timeout
+    let courseData;
     try {
-      await chrome.runtime.sendMessage({ type: 'VERIFY_TOKEN' });
-      isConfigured = true;
+      console.log('[Canvas GPA Widget] Fetching course data...');
+      courseData = await timeout(fetchCourseData(ContentState.courseId), 3000);
+      ContentState.courseData = courseData;
+      console.log('[Canvas GPA Widget] Course data loaded');
     } catch (error) {
-      isConfigured = false;
+      console.warn('[Canvas GPA Widget] Failed to fetch course data:', error.message);
+      courseData = { currentGrade: null, assignmentGroups: [] };
     }
 
-    if (!isConfigured) {
-      content.innerHTML = `
-        <div class="cgpa-setup">
-          <p>Please configure the extension first.</p>
-          <p class="cgpa-hint">Click the extension icon to set up your Canvas API token.</p>
-        </div>
-      `;
-      return;
+    // Get grading scale with timeout
+    let gradingScale;
+    try {
+      console.log('[Canvas GPA Widget] Fetching grading scale...');
+      gradingScale = await timeout(getGradingScaleForCourse(ContentState.courseId), 3000);
+      ContentState.gradingScale = gradingScale;
+      console.log('[Canvas GPA Widget] Grading scale loaded');
+    } catch (error) {
+      console.warn('[Canvas GPA Widget] Failed to fetch grading scale:', error.message);
+      gradingScale = { scale: { 'A': { min: 90, max: 100 }, 'B': { min: 80, max: 89 }, 'C': { min: 70, max: 79 }, 'D': { min: 60, max: 69 }, 'F': { min: 0, max: 59 } } };
     }
 
-    // Fetch course data (via background worker as API gateway - NO TOKEN PASSED)
-    const courseData = await fetchCourseData(ContentState.courseId);
-    ContentState.courseData = courseData;
-
-    // Get grading scale (via background worker as API gateway - NO TOKEN PASSED)
-    const gradingScale = await getGradingScaleForCourse(ContentState.courseId);
-    ContentState.gradingScale = gradingScale;
-
-    // Load the user's selected grading scale to get correct GPA points mapping
+    // Load grading points
     const gradePoints = await getGradePointsScale();
     ContentState.gradePoints = gradePoints;
 
@@ -398,7 +417,7 @@ async function loadAndDisplayCourseData(forceRefresh = false) {
     const { excludedAssignments = {} } = await getStoredData(['excludedAssignments']);
     ContentState.excludedAssignments = excludedAssignments[ContentState.courseId] || [];
 
-    // Calculate grade (with exclusions applied)
+    // Calculate grade
     const gradeResult = calculateGradeFromData(courseData, ContentState.excludedAssignments);
 
     // Fallback to Canvas enrollment current_score if assignment calculation failed
@@ -493,19 +512,45 @@ async function getGradingScaleForCourse(courseId) {
  * Returns the appropriate GRADE_POINTS based on user's selected scale
  */
 async function getGradePointsScale() {
+  const scales = {
+    'njit': {
+      'A': 4.0,
+      'B+': 3.5,
+      'B': 3.0,
+      'C+': 2.5,
+      'C': 2.0,
+      'D': 1.0,
+      'F': 0.0
+    },
+    'plusMinus': {
+      'A': 4.0,
+      'A-': 3.7,
+      'B+': 3.3,
+      'B': 3.0,
+      'B-': 2.7,
+      'C+': 2.3,
+      'C': 2.0,
+      'C-': 1.7,
+      'D+': 1.3,
+      'D': 1.0,
+      'D-': 0.7,
+      'F': 0.0
+    },
+    'standard': {
+      'A': 4.0,
+      'B': 3.0,
+      'C': 2.0,
+      'D': 1.0,
+      'F': 0.0
+    }
+  };
+
   try {
     const { selectedGradingScale = 'njit' } = await getStoredData(['selectedGradingScale']);
-
-    const scales = {
-      'njit': GRADE_POINTS_NJIT,
-      'plusMinus': GRADE_POINTS_PLUS_MINUS,
-      'standard': GRADE_POINTS_STANDARD
-    };
-
-    return scales[selectedGradingScale] || GRADE_POINTS_NJIT;
+    return scales[selectedGradingScale] || scales['njit'];
   } catch (error) {
     console.error('[Canvas GPA] Error getting grading scale, using default:', error);
-    return GRADE_POINTS_NJIT;
+    return scales['njit'];
   }
 }
 
@@ -657,9 +702,22 @@ function calculatePointsGrade(groups, excludedAssignments = []) {
  * @param {object} gradingScale - Grading scale with letter grade ranges
  * @param {object} gradePoints - GPA points mapping for letter grades
  */
-function convertGradeWithScale(percentage, gradingScale, gradePoints = GRADE_POINTS_NJIT) {
+function convertGradeWithScale(percentage, gradingScale, gradePoints = null) {
   if (percentage === null) {
     return { letterGrade: null, gpaPoints: null };
+  }
+
+  // Default to NJIT scale if not provided
+  if (!gradePoints) {
+    gradePoints = {
+      'A': 4.0,
+      'B+': 3.5,
+      'B': 3.0,
+      'C+': 2.5,
+      'C': 2.0,
+      'D': 1.0,
+      'F': 0.0
+    };
   }
 
   const scale = gradingScale.scale;
@@ -730,16 +788,18 @@ function generatePieChartSVG(breakdown, centerPercentage) {
       cx="${center}" cy="${center}" r="${radius}"
       stroke-dasharray="${dashArray}"
       stroke-dashoffset="${dashOffset}"
-      data-category="${cat.name}"
+      data-category="${sanitizeHTML(cat.name)}"
       data-percentage="${cat.percentage?.toFixed(1) || 0}%"
     />`;
   }).join('');
 
-  // Center text (rotated back to normal)
+  // Center text (horizontal orientation)
   const centerText = centerPercentage !== null
-    ? `<text x="${center}" y="${center}" text-anchor="middle" dominant-baseline="middle" transform="rotate(90 ${center} ${center})">
-        <tspan class="cgpa-pie-center-text" dy="-5">${centerPercentage.toFixed(1)}%</tspan>
-        <tspan class="cgpa-pie-center-label" x="${center}" dy="18">Overall</tspan>
+    ? `<text x="${center}" y="${center - 12}" text-anchor="middle" dominant-baseline="middle">
+        <tspan class="cgpa-pie-center-text">${centerPercentage.toFixed(1)}%</tspan>
+      </text>
+      <text x="${center}" y="${center + 12}" text-anchor="middle" dominant-baseline="middle">
+        <tspan class="cgpa-pie-center-label">Overall</tspan>
       </text>`
     : '';
 
@@ -769,7 +829,7 @@ function generatePieChartLegend(breakdown) {
       <div class="cgpa-pie-legend-item">
         <div class="cgpa-pie-legend-left">
           <span class="cgpa-pie-legend-dot cgpa-legend-color-${index % 8}"></span>
-          <span class="cgpa-pie-legend-name" title="${cat.name}">${cat.name}</span>
+          <span class="cgpa-pie-legend-name" title="${sanitizeHTML(cat.name)}">${sanitizeHTML(cat.name)}</span>
           <span class="cgpa-pie-legend-weight">${weightText}</span>
         </div>
         <span class="cgpa-pie-legend-percent">${cat.percentage.toFixed(0)}%</span>
@@ -820,7 +880,7 @@ function renderAssignmentList(assignmentGroups, excludedAssignments) {
                  ${!isExcluded ? 'checked' : ''}
                  data-assignment-id="${assignment.id}"
                  title="${isExcluded ? 'Click to include in grade' : 'Click to exclude from grade'}">
-          <span class="cgpa-assignment-name" title="${assignment.name}">${assignment.name}</span>
+          <span class="cgpa-assignment-name" title="${sanitizeHTML(assignment.name)}">${sanitizeHTML(assignment.name)}</span>
           ${excludedLabel}
           ${scoreDisplay}
         </div>
@@ -829,7 +889,7 @@ function renderAssignmentList(assignmentGroups, excludedAssignments) {
 
     groupsHtml += `
       <div class="cgpa-assignment-group">
-        <div class="cgpa-assignment-group-name">${group.name}</div>
+        <div class="cgpa-assignment-group-name">${sanitizeHTML(group.name)}</div>
         ${assignmentItems}
       </div>
     `;
@@ -925,7 +985,7 @@ function renderWidget(courseData, gradeResult, gradeInfo, gradingScale) {
 
   content.innerHTML = `
     <div class="cgpa-grade-display">
-      <div class="cgpa-percentage">${percentage !== null ? percentage.toFixed(1) + '%' : 'N/A'}</div>
+      <div class="cgpa-percentage">${percentage !== null ? (percentage === 100 ? '100%' : percentage.toFixed(1) + '%') : 'N/A'}</div>
       <div class="cgpa-letter-grade ${letterClass}">${gradeInfo.letterGrade || '--'}</div>
       <div class="cgpa-gpa-points">${gradeInfo.gpaPoints !== null ? gradeInfo.gpaPoints.toFixed(1) + ' GPA pts' : ''}</div>
     </div>
@@ -1007,9 +1067,9 @@ function renderAssignmentOptions(assignmentGroups) {
     for (const assignment of group.assignments || []) {
       const submission = assignment.submission;
       const hasScore = submission?.score !== null && submission?.score !== undefined;
-      const label = `${assignment.name} (${hasScore ? submission.score + '/' : ''}${assignment.points_possible || 0} pts)`;
+      const label = `${sanitizeHTML(assignment.name)} (${hasScore ? submission.score + '/' : ''}${assignment.points_possible || 0} pts)`;
 
-      options.push(`<option value="${assignment.id}" data-points="${assignment.points_possible || 0}">${label}</option>`);
+      options.push(`<option value="${assignment.id}" data-points="${assignment.points_possible || 0}">${sanitizeHTML(label)}</option>`);
     }
   }
 
@@ -1069,6 +1129,57 @@ function setupWidgetEventListeners() {
     assignmentList.addEventListener('change', checkboxListener);
     assignmentList._checkboxListener = checkboxListener; // Store reference for cleanup
   }
+}
+
+/**
+ * Get default grading scale
+ */
+function getDefaultScale() {
+  return {
+    'A': { min: 90, max: 100 },
+    'B+': { min: 85, max: 89.99 },
+    'B': { min: 80, max: 84.99 },
+    'C+': { min: 75, max: 79.99 },
+    'C': { min: 70, max: 74.99 },
+    'D': { min: 60, max: 69.99 },
+    'F': { min: 0, max: 59.99 }
+  };
+}
+
+/**
+ * Validate a grading scale
+ */
+function validateGradingScale(scale) {
+  const errors = [];
+
+  if (!scale || typeof scale !== 'object') {
+    return ['Scale must be an object'];
+  }
+
+  if (Object.keys(scale).length === 0) {
+    return ['Scale must have at least one grade'];
+  }
+
+  // Check that ranges are valid
+  for (const [grade, range] of Object.entries(scale)) {
+    if (range.min === null || range.min === undefined || range.max === null || range.max === undefined) {
+      continue;
+    }
+
+    if (range.min < 0 || range.min > 100) {
+      errors.push(`${grade} minimum must be between 0 and 100`);
+    }
+
+    if (range.max < 0 || range.max > 100) {
+      errors.push(`${grade} maximum must be between 0 and 100`);
+    }
+
+    if (range.min > range.max) {
+      errors.push(`${grade} minimum cannot be greater than maximum`);
+    }
+  }
+
+  return errors;
 }
 
 /**
@@ -1188,7 +1299,7 @@ async function openScaleEditor() {
     }
 
     // Validate the grading scale (check for overlaps, gaps, and valid ranges)
-    const errors = GradingScales.validateScale(newScale);
+    const errors = validateGradingScale(newScale);
     if (errors.length > 0) {
       alert('Invalid grading scale:\n\n' + errors.join('\n'));
       return;

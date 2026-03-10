@@ -5,11 +5,29 @@
  */
 
 const GPACalculator = {
-  // Import from constants.js - single source of truth
-  GRADE_POINTS: GRADE_POINTS_NJIT,
+  // NJIT GPA points mapping
+  GRADE_POINTS: {
+    'A': 4.0,
+    'B+': 3.5,
+    'B': 3.0,
+    'C+': 2.5,
+    'C': 2.0,
+    'D': 1.0,
+    'F': 0.0
+  },
 
-  // Academic standing thresholds - from constants.js
-  ACADEMIC_STANDING: ACADEMIC_STANDING,
+  // Academic standing thresholds
+  ACADEMIC_STANDING: {
+    LATIN_HONORS: {
+      SUMMA_CUM_LAUDE: 3.95,
+      MAGNA_CUM_LAUDE: 3.85,
+      CUM_LAUDE: 3.75
+    },
+    DEANS_LIST: 3.75,
+    HONORS: 3.5,
+    GOOD_STANDING: 2.0,
+    PROBATION: 2.0
+  },
 
   /**
    * Calculate semester GPA from courses

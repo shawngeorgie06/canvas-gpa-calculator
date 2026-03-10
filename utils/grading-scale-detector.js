@@ -5,8 +5,16 @@
  */
 
 const GradingScaleDetector = {
-  // Import from constants.js - single source of truth
-  GRADE_POINTS: GRADE_POINTS_NJIT,
+  // NJIT GPA points mapping
+  GRADE_POINTS: {
+    'A': 4.0,
+    'B+': 3.5,
+    'B': 3.0,
+    'C+': 2.5,
+    'C': 2.0,
+    'D': 1.0,
+    'F': 0.0
+  },
 
   // Default grading scale (common 10-point scale)
   DEFAULT_SCALE: {

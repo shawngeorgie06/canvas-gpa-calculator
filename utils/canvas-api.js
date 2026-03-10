@@ -401,47 +401,73 @@ const CanvasAPI = {
 
   /**
    * Get all courses with their grading data
-   * NOTE: This just returns course list without grade details.
-   * Grade calculation happens in popup.js after fetching from background worker.
-   * @returns {Promise<array>} All courses (grades will be fetched separately)
+   * Fetches grades from enrollment data serially to avoid rate limiting
+   * @returns {Promise<array>} All courses with grades
    */
   async getAllCoursesWithGrades() {
     const courses = await this.getCourses();
 
-    console.log('[Canvas API] Raw courses from API - returning without grade details');
+    console.log('[Canvas API] Fetching grades for', courses.length, 'courses');
 
-    // Return courses without attempting to fetch enrollment data here
-    // This avoids the rate limiting and API call issues
-    const coursesWithGrades = courses.map(course => {
-      // Try multiple ways to get term name
-      let termName = null;
-      if (course.term && course.term.name) {
-        termName = course.term.name;
-      } else if (course.enrollment_term_id) {
-        termName = `Term ${course.enrollment_term_id}`;
-      }
-
-      // Try to extract term from course name (e.g., "CS 101 - Fall 2024")
-      if (!termName && course.name) {
-        const termMatch = course.name.match(/(Fall|Spring|Summer|Winter)\s*'?\d{2,4}/i);
-        if (termMatch) {
-          termName = termMatch[0];
+    // Fetch enrollment/grade data for each course serially
+    const coursesWithGrades = [];
+    for (const course of courses) {
+      try {
+        // Get term name
+        let termName = null;
+        if (course.term && course.term.name) {
+          termName = course.term.name;
+        } else if (course.enrollment_term_id) {
+          termName = `Term ${course.enrollment_term_id}`;
         }
+
+        // Try to extract term from course name
+        if (!termName && course.name) {
+          const termMatch = course.name.match(/(Fall|Spring|Summer|Winter)\s*'?\d{2,4}/i);
+          if (termMatch) {
+            termName = termMatch[0];
+          }
+        }
+
+        // Fetch enrollment data to get grades
+        let currentGrade = null;
+        let finalGrade = null;
+        let letterGrade = null;
+
+        try {
+          const enrollment = await this.getEnrollment(course.id);
+          if (enrollment && enrollment.grades) {
+            const grades = enrollment.grades;
+            // Use current_score (matches Canvas UI display), fall back to final_score
+            currentGrade = grades.current_score ?? grades.computed_current_score ?? null;
+            finalGrade = grades.final_score ?? grades.computed_final_score ?? null;
+            letterGrade = grades.current_grade || grades.computed_current_grade || null;
+          }
+        } catch (e) {
+          console.warn(`[Canvas API] Could not fetch enrollment for course ${course.id}:`, e.message);
+        }
+
+        coursesWithGrades.push({
+          id: course.id,
+          name: course.name,
+          code: course.course_code,
+          term: termName,
+          currentGrade,
+          finalGrade,
+          letterGrade,
+          isCompleted: course.workflow_state === 'completed' || course.concluded,
+          credits: course.credit_hours,
+          gradingStandard: null
+        });
+
+        // Add a small delay between requests to avoid rate limiting
+        await this.sleep(50);
+      } catch (error) {
+        console.warn(`[Canvas API] Error processing course ${course.id}:`, error);
       }
+    }
 
-      return {
-        id: course.id,
-        name: course.name,
-        code: course.course_code,
-        term: termName,
-        currentGrade: null, // Will be filled in by popup.js from background worker
-        finalGrade: null,
-        letterGrade: null,
-        isCompleted: course.workflow_state === 'completed' || course.concluded,
-        gradingStandard: null
-      };
-    });
-
+    console.log('[Canvas API] Fetched grades for all courses');
     return coursesWithGrades;
   }
 };
