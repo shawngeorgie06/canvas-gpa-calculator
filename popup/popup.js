@@ -9,6 +9,35 @@ function isRealSemester(name) {
   return /^(Fall|Spring|Summer|Winter)\s+\d{4}/i.test(name);
 }
 
+/**
+ * Sanitize HTML by escaping special characters
+ * Prevents XSS attacks when rendering user-provided content
+ */
+function sanitizeHTML(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+/**
+ * Validate semester name format
+ * Only allows: "Fall 2024", "Spring 2025", "Summer 2024", "Winter 2024"
+ */
+function validateSemesterName(name) {
+  if (!name || typeof name !== 'string') return false;
+  return /^(Fall|Spring|Summer|Winter)\s+\d{4}$/.test(name.trim());
+}
+
+/**
+ * Validate course name (alphanumeric, spaces, common punctuation only)
+ */
+function validateCourseName(name) {
+  if (!name || typeof name !== 'string') return false;
+  // Allow letters, numbers, spaces, hyphens, ampersands, parentheses
+  return /^[a-zA-Z0-9\s\-&()]+$/.test(name.trim());
+}
+
 // Grading Scale Presets
 const GRADING_SCALES = {
   njit: {
@@ -1460,7 +1489,7 @@ async function updateGPADisplay() {
     for (const semData of realSemesterGPAs) {
       gpaSum += semData.gpa;
       rows += `<div class="gpa-breakdown-row">
-        <span>✓ ${semData.semester}</span>
+        <span>✓ ${sanitizeHTML(semData.semester)}</span>
         <span>${semData.gpa.toFixed(2)} GPA (${semData.credits} cr)</span>
       </div>`;
     }
@@ -1470,7 +1499,7 @@ async function updateGPADisplay() {
     for (const sem of excludedSemesters) {
       if (isRealSemester(sem)) {
         excludedRows += `<div class="gpa-breakdown-row" style="opacity: 0.5;">
-          <span>✗ ${sem}</span>
+          <span>✗ ${sanitizeHTML(sem)}</span>
           <span>NOT COUNTED</span>
         </div>`;
       }
@@ -1899,8 +1928,8 @@ async function renderCoursesList() {
     return `
       <div class="course-card ${isManual ? 'manual-course' : ''} ${needsReview ? 'needs-review' : ''} ${isExcluded ? 'upcoming' : ''} ${isExcludedFromGPA ? 'excluded-from-gpa' : ''}" data-course-id="${course.id}">
         <div class="course-header">
-          <span class="course-name">${course.name} ${isManual ? '<span class="manual-badge">Manual</span>' : ''} ${isExcluded ? '<span class="upcoming-badge">Excluded</span>' : ''} ${isExcludedFromGPA ? '<span class="upcoming-badge">Not in GPA</span>' : ''}</span>
-          <span class="course-credits">${course.credits} cr${showTerm ? ' · ' + course.term : ''}</span>
+          <span class="course-name">${sanitizeHTML(course.name)} ${isManual ? '<span class="manual-badge">Manual</span>' : ''} ${isExcluded ? '<span class="upcoming-badge">Excluded</span>' : ''} ${isExcludedFromGPA ? '<span class="upcoming-badge">Not in GPA</span>' : ''}</span>
+          <span class="course-credits">${course.credits} cr${showTerm ? ' · ' + sanitizeHTML(course.term) : ''}</span>
         </div>
         <div class="course-grade">
           ${course.letterGrade ? `<span class="grade-letter ${letterClass}">${course.letterGrade}</span>` : '<span class="grade-letter na">N/A</span>'}
@@ -2089,6 +2118,18 @@ async function addManualCourse() {
 
   const [name, grade, creditsStr, term] = parts;
   const credits = parseInt(creditsStr);
+
+  // Validate course name (security)
+  if (!validateCourseName(name)) {
+    alert('Invalid course name. Use only letters, numbers, spaces, hyphens, and parentheses.');
+    return;
+  }
+
+  // Validate semester name (security)
+  if (!validateSemesterName(term)) {
+    alert('Invalid semester format. Use: "Fall 2024", "Spring 2025", "Summer 2024", or "Winter 2024"');
+    return;
+  }
 
   const normalizedGrade = grade.toUpperCase();
   const isNA = normalizedGrade === 'N/A' || normalizedGrade === 'NA' || normalizedGrade === '';
