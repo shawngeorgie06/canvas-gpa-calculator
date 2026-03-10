@@ -216,16 +216,22 @@ async function refreshGradesInBackground() {
     const gradeChanges = detectGradeChanges(oldCache?.courses, courses);
 
     // Update cache - CLEAR grade cache to force fresh fetch
+    const syncTimestamp = Date.now();
     await chrome.storage.local.set({
       cache: {
         courses,
-        coursesTimestamp: Date.now(),
+        coursesTimestamp: syncTimestamp,
         grades: {},  // Clear old grade cache to force refresh
         gradesTimestamp: {}  // Clear timestamps
       },
-      lastSyncTime: Date.now(),
+      lastSyncTime: syncTimestamp,
       detectedSemesters: semesterInfo.semesters,
-      upcomingSemesters: semesterInfo.upcomingSemesters
+      upcomingSemesters: semesterInfo.upcomingSemesters,
+      lastSyncResult: {
+        success: true,
+        timestamp: syncTimestamp,
+        error: null
+      }
     });
 
     // Notify if grades changed
@@ -262,6 +268,16 @@ async function refreshGradesInBackground() {
     };
   } catch (error) {
     console.error('[Canvas GPA] Background refresh error:', error);
+
+    // Track the error in sync result
+    await chrome.storage.local.set({
+      lastSyncResult: {
+        success: false,
+        timestamp: Date.now(),
+        error: error.message
+      }
+    }).catch(err => console.error('[Canvas GPA] Failed to save sync result:', err));
+
     return { success: false, error: error.message };
   }
 }

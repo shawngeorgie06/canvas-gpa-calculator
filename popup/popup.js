@@ -72,7 +72,17 @@ const state = {
   semesterGPA: null,
   cumulativeGPA: null,
   isConnected: false,
-  isLoading: false
+  isLoading: false,
+  syncState: 'never'   // 'never' | 'success' | 'syncing' | 'error' | 'stale'
+};
+
+// Sync status constants
+const SYNC_STATES = {
+  NEVER: { icon: '⭕', text: 'Never synced', color: '#9ca3af', className: 'info' },
+  SUCCESS: { icon: '✅', text: 'Synced', color: '#059669', className: 'success' },
+  SYNCING: { icon: '🔄', text: 'Syncing...', color: '#0284c7', className: 'info' },
+  ERROR: { icon: '⚠️', text: 'Sync failed', color: '#dc2626', className: 'error' },
+  STALE: { icon: '⏰', text: 'Data may be outdated', color: '#d97706', className: 'warning' }
 };
 
 // DOM Elements
@@ -81,7 +91,19 @@ const elements = {
   tabs: document.querySelectorAll('.tab'),
   tabContents: document.querySelectorAll('.tab-content'),
 
-  // Dashboard
+  // Dashboard - Sync Status
+  syncIcon: document.getElementById('syncIcon'),
+  syncText: document.getElementById('syncText'),
+  syncTime: document.getElementById('syncTime'),
+  syncToggleDetails: document.getElementById('syncToggleDetails'),
+  syncDetailsPanel: document.getElementById('syncDetailsPanel'),
+  syncDetailTime: document.getElementById('syncDetailTime'),
+  syncDetailNext: document.getElementById('syncDetailNext'),
+  syncErrorRow: document.getElementById('syncErrorRow'),
+  syncDetailError: document.getElementById('syncDetailError'),
+  syncAutoStatus: document.getElementById('syncAutoStatus'),
+
+  // Dashboard - Connection & GPA
   connectionStatus: document.getElementById('connectionStatus'),
   semesterGPA: document.getElementById('semesterGPA'),
   semesterCredits: document.getElementById('semesterCredits'),
@@ -129,6 +151,7 @@ const elements = {
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
   await initializeDarkMode();
+  await initializeSyncStatus();
   await initializeGradingScale();
   await initializePopup();
   setupEventListeners();
@@ -162,6 +185,100 @@ function updateDarkModeIcon(isDark) {
   const icon = document.querySelector('.dark-mode-icon');
   if (icon) {
     icon.textContent = isDark ? '☀️' : '🌙';
+  }
+}
+
+/**
+ * Update sync status display
+ */
+function updateSyncStatus(syncState, details = {}) {
+  const status = SYNC_STATES[syncState];
+  if (!status) {
+    console.warn('[Sync Status] Unknown sync state:', syncState);
+    return;
+  }
+
+  state.syncState = syncState.toLowerCase();
+
+  // Update icon
+  if (elements.syncIcon) {
+    elements.syncIcon.textContent = status.icon;
+    elements.syncIcon.className = `sync-icon ${status.className}`;
+    if (syncState === 'SYNCING') {
+      elements.syncIcon.classList.add('syncing');
+    }
+  }
+
+  // Update text and color
+  if (elements.syncText) {
+    elements.syncText.textContent = status.text;
+    elements.syncText.style.color = status.color;
+  }
+
+  // Update time display
+  if (details.lastSyncTime && elements.syncTime) {
+    const time = new Date(details.lastSyncTime);
+    const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const ageMinutes = (Date.now() - details.lastSyncTime) / 60000;
+
+    if (ageMinutes < 1) {
+      elements.syncTime.textContent = 'just now';
+    } else if (ageMinutes < 60) {
+      elements.syncTime.textContent = `${Math.floor(ageMinutes)}m ago`;
+    } else {
+      elements.syncTime.textContent = timeStr;
+    }
+
+    // Store for details panel
+    if (elements.syncDetailTime) {
+      elements.syncDetailTime.textContent = time.toLocaleString();
+    }
+  }
+
+  // Show/hide error details
+  if (syncState === 'ERROR' && details.error && elements.syncErrorRow) {
+    elements.syncErrorRow.classList.remove('hidden');
+    if (elements.syncDetailError) {
+      elements.syncDetailError.textContent = details.error;
+    }
+  } else if (elements.syncErrorRow) {
+    elements.syncErrorRow.classList.add('hidden');
+  }
+
+  console.log(`[Sync Status] Updated to: ${syncState}`, details);
+}
+
+/**
+ * Initialize sync status display
+ */
+async function initializeSyncStatus() {
+  const { lastSyncResult } = await chrome.storage.local.get('lastSyncResult');
+
+  if (!lastSyncResult) {
+    updateSyncStatus('NEVER');
+    return;
+  }
+
+  if (lastSyncResult.success && lastSyncResult.timestamp) {
+    const ageMinutes = (Date.now() - lastSyncResult.timestamp) / 60000;
+    if (ageMinutes > 30) {
+      updateSyncStatus('STALE', { lastSyncTime: lastSyncResult.timestamp });
+    } else {
+      updateSyncStatus('SUCCESS', { lastSyncTime: lastSyncResult.timestamp });
+    }
+  } else if (lastSyncResult.error) {
+    updateSyncStatus('ERROR', { error: lastSyncResult.error });
+  }
+
+  // Setup toggle for details panel
+  if (elements.syncToggleDetails) {
+    elements.syncToggleDetails.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (elements.syncDetailsPanel) {
+        elements.syncDetailsPanel.classList.toggle('hidden');
+        elements.syncToggleDetails.classList.toggle('open');
+      }
+    });
   }
 }
 
@@ -451,6 +568,8 @@ function setupEventListeners() {
         // THEN clear cache and reload popup with fresh data
         console.log('[GPA Popup] Clearing cache and reloading courses...');
         await Storage.clearCache();
+        // Also clear grading scale cache to refresh from Canvas
+        await chrome.storage.local.set({ gradingScaleCache: {} });
         await loadCoursesData();
 
         // Update sync time on manual refresh
@@ -569,6 +688,16 @@ function setupEventListeners() {
 
   elements.exportData.addEventListener('click', exportData);
 
+  // Import data button
+  const importBtn = document.getElementById('importData');
+  const importInput = document.getElementById('importFileInput');
+  if (importBtn) {
+    importBtn.addEventListener('click', importData);
+  }
+  if (importInput) {
+    importInput.addEventListener('change', handleFileImport);
+  }
+
   elements.clearAllData.addEventListener('click', async () => {
     if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
       await Storage.clear();
@@ -652,6 +781,60 @@ function showTestResult(type, message) {
 }
 
 /**
+ * Get and cache grading scale for a course
+ * @param {string} courseId - Course ID
+ * @returns {Promise<object>} Grading scale info with source and scale
+ */
+async function getCoursesGradingScale(courseId) {
+  try {
+    // Try to get from cache first
+    const { gradingScaleCache = {} } = await Storage.get('gradingScaleCache');
+
+    if (gradingScaleCache[courseId]) {
+      return gradingScaleCache[courseId];
+    }
+
+    // Fetch from Canvas API
+    const gradingStandard = await CanvasAPI.getActiveGradingStandard(courseId);
+    let scalingInfo = null;
+
+    if (gradingStandard && gradingStandard.grading_scheme) {
+      // Use Canvas grading scheme
+      const scale = GradingScaleDetector.convertCanvasScheme(gradingStandard.grading_scheme);
+      scalingInfo = {
+        scale,
+        source: 'canvas_api',
+        confidence: 95,
+        courseId
+      };
+    } else {
+      // Fall back to default
+      scalingInfo = {
+        scale: GradingScaleDetector.DEFAULT_SCALE_PLUS_MINUS,
+        source: 'default_fallback',
+        confidence: 50,
+        courseId
+      };
+    }
+
+    // Cache the result
+    gradingScaleCache[courseId] = scalingInfo;
+    await Storage.set({ gradingScaleCache });
+
+    return scalingInfo;
+  } catch (error) {
+    console.warn(`Failed to fetch grading scale for course ${courseId}:`, error);
+    return {
+      scale: GradingScaleDetector.DEFAULT_SCALE_PLUS_MINUS,
+      source: 'default_fallback',
+      confidence: 50,
+      courseId,
+      error: error.message
+    };
+  }
+}
+
+/**
  * Load courses data from Canvas
  */
 async function loadCoursesData() {
@@ -673,13 +856,14 @@ async function loadCoursesData() {
     // Get custom course data from storage
     const { customCourseData = {} } = await Storage.get('customCourseData');
 
-    // Process courses with minimal API calls (use already-fetched data)
-    const processedCourses = courses.map((course) => {
+    // Process courses with per-course grading scales from Canvas
+    const processedCourses = await Promise.all(courses.map(async (course) => {
       const customData = customCourseData[course.id];
       let letterGrade = null;
       let gradePoints = null;
       let calculatedGrade = null;
       let gradeSource = 'none';
+      let gradingScaleInfo = null;
 
       // Priority: Custom override > Canvas letter grade > Canvas numeric grade (prefer final over current)
       if (customData && customData.letterGrade) {
@@ -693,19 +877,24 @@ async function loadCoursesData() {
         calculatedGrade = course.currentGrade ?? course.finalGrade;
         gradeSource = 'canvas';
       } else if (course.currentGrade !== null && course.currentGrade !== undefined) {
-        // Use current grade (matches Canvas UI display)
+        // Use current grade with course-specific Canvas grading scale
         calculatedGrade = course.currentGrade;
-        const gradingScale = course.gradingScale || GRADING_SCALES.njit;
-        letterGrade = convertGradeToLetter(calculatedGrade, gradingScale.points);
-        gradePoints = getGradePoints(letterGrade);
+        gradingScaleInfo = await getCoursesGradingScale(course.id);
+        const scale = gradingScaleInfo?.scale || GradingScaleDetector.DEFAULT_SCALE_PLUS_MINUS;
+        letterGrade = GradingScaleDetector.percentageToLetterGrade(calculatedGrade, scale);
+        gradePoints = GPACalculator.GRADE_POINTS[letterGrade] ?? 0;
         gradeSource = 'calculated';
+        console.log(`[GPA Popup] ${course.name}: ${calculatedGrade}% → ${letterGrade} (${gradingScaleInfo?.source})`);
+
       } else if (course.finalGrade !== null && course.finalGrade !== undefined) {
         // Fall back to final grade if current not available
         calculatedGrade = course.finalGrade;
-        const gradingScale = course.gradingScale || GRADING_SCALES.njit;
-        letterGrade = convertGradeToLetter(calculatedGrade, gradingScale.points);
-        gradePoints = getGradePoints(letterGrade);
+        gradingScaleInfo = await getCoursesGradingScale(course.id);
+        const scale = gradingScaleInfo?.scale || GradingScaleDetector.DEFAULT_SCALE_PLUS_MINUS;
+        letterGrade = GradingScaleDetector.percentageToLetterGrade(calculatedGrade, scale);
+        gradePoints = GPACalculator.GRADE_POINTS[letterGrade] ?? 0;
         gradeSource = 'calculated';
+        console.log(`[GPA Popup] ${course.name}: ${calculatedGrade}% → ${letterGrade} (${gradingScaleInfo?.source})`);
       }
 
       const credits = customData?.credits || course.credits || estimateCreditHours(course) || 3;
@@ -718,9 +907,10 @@ async function loadCoursesData() {
         letterGrade: letterGrade,
         gradePoints: gradePoints,
         calculatedGrade,
-        gradeSource
+        gradeSource,
+        gradingScaleInfo
       };
-    });
+    }));
 
     // Add manual courses from storage
     const { manualCourses = [] } = await Storage.get('manualCourses');
@@ -2174,16 +2364,168 @@ async function exportData() {
     }
   }
 
+  // Add metadata
   const exportDate = new Date().toISOString().slice(0, 10);
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const exportDataWithMetadata = {
+    _exportVersion: '1.0',
+    _exportDate: new Date().toISOString(),
+    _extensionVersion: chrome.runtime.getManifest().version,
+    ...exportData
+  };
+
+  const blob = new Blob([JSON.stringify(exportDataWithMetadata, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement('a');
   a.href = url;
-  a.download = `canvas-gpa-data-${exportDate}.json`;
+  a.download = `canvas-gpa-backup-${exportDate}.json`;
   a.click();
 
   URL.revokeObjectURL(url);
+  showStatus('success', 'Data exported successfully');
+}
+
+/**
+ * Error recovery solutions
+ */
+const ERROR_SOLUTIONS = {
+  TOKEN_INVALID: {
+    icon: '🔑',
+    title: 'Invalid API Token',
+    message: 'Your Canvas API token is invalid or expired.',
+    steps: ['Go to Canvas Settings > Approved Integrations', 'Click "+ New Access Token"', 'Enter "GPA Calculator"', 'Copy and paste the token here', 'Click "Save & Connect"']
+  },
+  NETWORK: {
+    icon: '🌐',
+    title: 'Cannot Connect to Canvas',
+    message: 'Cannot reach your Canvas instance.',
+    steps: ['Check your internet connection', 'Verify your Canvas URL is correct', 'Try accessing Canvas in your browser', 'Check Canvas status']
+  },
+  RATE_LIMIT: {
+    icon: '⏳',
+    title: 'Too Many Requests',
+    message: 'Canvas API rate limit exceeded. Will retry automatically.',
+    steps: ['Wait 30-60 seconds', 'Avoid refreshing multiple times quickly']
+  }
+};
+
+let lastErrorState = null;
+
+function showErrorModal(errorType, details = {}) {
+  const solution = ERROR_SOLUTIONS[errorType] || ERROR_SOLUTIONS.NETWORK;
+  lastErrorState = { errorType, details };
+
+  document.getElementById('errorIcon').textContent = solution.icon;
+  document.getElementById('errorTitle').textContent = solution.title;
+  document.getElementById('errorMessage').textContent = solution.message;
+
+  const stepsList = document.getElementById('errorStepsList');
+  stepsList.textContent = '';
+  solution.steps.forEach(step => {
+    const li = document.createElement('li');
+    li.textContent = step;
+    stepsList.appendChild(li);
+  });
+
+  let tech = `Error: ${errorType}\nTime: ${new Date().toISOString()}`;
+  if (details.message) tech += `\nDetails: ${details.message}`;
+  document.getElementById('errorTechnical').textContent = tech;
+
+  document.getElementById('errorRetryBtn').style.display = (errorType === 'RATE_LIMIT') ? 'none' : '';
+  document.getElementById('errorModal').classList.remove('hidden');
+}
+
+function closeErrorModal() {
+  document.getElementById('errorModal').classList.add('hidden');
+}
+
+function retryAfterError() {
+  closeErrorModal();
+  if (lastErrorState && lastErrorState.errorType === 'TOKEN_INVALID') {
+    switchTab('settings');
+  } else if (state.isConnected) {
+    elements.refreshBtn.click();
+  }
+}
+
+/**
+ * Import data from backup file
+ */
+async function importData() {
+  const input = document.getElementById('importFileInput');
+  if (input) {
+    input.click();
+  }
+}
+
+/**
+ * Handle file import
+ */
+async function handleFileImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    // Validate data structure
+    if (!validateImportData(data)) {
+      throw new Error('Invalid backup file format');
+    }
+
+    // Show confirmation before overwriting
+    const confirmed = confirm(
+      'This will replace all your current data with the imported backup.\n\n' +
+      'This action cannot be undone. Continue?'
+    );
+
+    if (!confirmed) {
+      e.target.value = ''; // Reset input
+      return;
+    }
+
+    // Remove metadata fields from import data
+    const importData = { ...data };
+    delete importData._exportVersion;
+    delete importData._exportDate;
+    delete importData._extensionVersion;
+
+    // Import data - don't overwrite token/URL (security)
+    const { canvasApiToken, canvasBaseUrl } = await Storage.get(['canvasApiToken', 'canvasBaseUrl']);
+
+    await chrome.storage.local.set({
+      ...importData,
+      // Keep existing API credentials
+      ...(canvasApiToken && { canvasApiToken }),
+      ...(canvasBaseUrl && { canvasBaseUrl })
+    });
+
+    showStatus('success', 'Data imported successfully! Reloading...');
+    setTimeout(() => location.reload(), 1500);
+
+  } catch (error) {
+    console.error('[Import Error]', error);
+    showStatus('error', `Import failed: ${error.message}`);
+  }
+
+  e.target.value = ''; // Reset input
+}
+
+/**
+ * Validate imported data structure
+ */
+function validateImportData(data) {
+  // Check if it's an object
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+
+  // Check for reasonable structure - should have some expected fields
+  const expectedFields = ['customCourseData', 'manualCourses', 'previousGPA', 'darkMode'];
+  const hasExpectedFields = expectedFields.some(field => field in data);
+
+  return hasExpectedFields;
 }
 
 /**

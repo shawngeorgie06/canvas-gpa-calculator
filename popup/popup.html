@@ -33,8 +33,36 @@
       <!-- Connection Status -->
       <div id="connectionStatus" class="status-banner"></div>
 
-      <!-- Last Sync Info -->
-      <div id="lastSyncInfo" class="last-sync-info"></div>
+      <!-- Last Sync Info - Enhanced -->
+      <div class="sync-status-container">
+        <div class="sync-status-bar">
+          <div class="sync-icon" id="syncIcon">⭕</div>
+          <div class="sync-details-main">
+            <div class="sync-text" id="syncText">Never synced</div>
+            <div class="sync-time" id="syncTime"></div>
+          </div>
+          <button id="syncToggleDetails" class="sync-toggle-btn" title="Show sync details">▼</button>
+        </div>
+
+        <div class="sync-details-panel hidden" id="syncDetailsPanel">
+          <div class="sync-detail-row">
+            <span class="detail-label">Last successful sync:</span>
+            <span id="syncDetailTime">--</span>
+          </div>
+          <div class="sync-detail-row">
+            <span class="detail-label">Next auto-sync:</span>
+            <span id="syncDetailNext">in ~15 min</span>
+          </div>
+          <div class="sync-detail-row hidden" id="syncErrorRow">
+            <span class="detail-label">Last error:</span>
+            <span id="syncDetailError" class="error-text">--</span>
+          </div>
+          <div class="sync-detail-row">
+            <span class="detail-label">Auto-sync status:</span>
+            <span id="syncAutoStatus">✅ Enabled (every 15 min)</span>
+          </div>
+        </div>
+      </div>
 
       <!-- Semester Filter -->
       <div class="semester-filter">
@@ -223,9 +251,14 @@
       <!-- Data Management -->
       <div class="settings-section">
         <h3>Data Management</h3>
+        <div class="button-group">
+          <button id="exportData" class="btn btn-secondary">📥 Export Data</button>
+          <button id="importData" class="btn btn-secondary">📤 Import Data</button>
+          <input type="file" id="importFileInput" accept=".json" style="display: none;">
+        </div>
+        <p class="help-text">Export saves all your settings, courses, and GPA data. Import restores from a previous export.</p>
         <button id="clearCache" class="btn btn-secondary">Clear Cache</button>
         <button id="resetSemesters" class="btn btn-secondary">Reset Semester Detection</button>
-        <button id="exportData" class="btn btn-secondary">Export Data</button>
         <button id="clearAllData" class="btn btn-danger">Clear All Data</button>
       </div>
 
@@ -243,6 +276,37 @@
           <li>Copy the token and paste it here</li>
         </ol>
         <p class="warning">Keep your token secure! It grants access to your Canvas account.</p>
+      </div>
+
+      <!-- Error Recovery Modal -->
+      <div id="errorModal" class="error-modal hidden">
+        <div class="error-modal-overlay" onclick="closeErrorModal()"></div>
+        <div class="error-modal-content">
+          <div class="error-header">
+            <span class="error-icon" id="errorIcon">⚠️</span>
+            <h2 id="errorTitle">Error</h2>
+            <button class="error-close-btn" onclick="closeErrorModal()">×</button>
+          </div>
+
+          <div class="error-body">
+            <p id="errorMessage" class="error-message"></p>
+
+            <div class="error-steps" id="errorStepsContainer">
+              <h4>How to fix:</h4>
+              <ol id="errorStepsList"></ol>
+            </div>
+
+            <details class="error-details">
+              <summary>🔧 Technical Details</summary>
+              <pre id="errorTechnical"></pre>
+            </details>
+          </div>
+
+          <div class="error-actions">
+            <button id="errorRetryBtn" class="btn btn-primary" onclick="retryAfterError()">Retry</button>
+            <button class="btn btn-secondary" onclick="closeErrorModal()">Dismiss</button>
+          </div>
+        </div>
       </div>
     </section>
   </div>
