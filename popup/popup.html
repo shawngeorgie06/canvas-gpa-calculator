@@ -96,6 +96,43 @@
         <span class="standing-text">Calculate your grades to see academic standing</span>
       </div>
 
+      <!-- Semester Comparison -->
+      <div class="semester-comparison-section">
+        <div class="comparison-header">
+          <h3>📊 Semester Comparison</h3>
+          <button id="toggleComparison" class="btn btn-secondary btn-small" title="Show/hide comparison">▼</button>
+        </div>
+
+        <div id="comparisonPanel" class="comparison-panel">
+          <p class="help-text">View your GPA trends across semesters</p>
+
+          <!-- Comparison Tabs -->
+          <div class="comparison-tabs">
+            <button id="trendViewBtn" class="comparison-tab active" data-view="trend">Trend</button>
+            <button id="detailViewBtn" class="comparison-tab" data-view="detail">Details</button>
+            <button id="insightsViewBtn" class="comparison-tab" data-view="insights">Insights</button>
+          </div>
+
+          <!-- Trend View -->
+          <div id="trendView" class="comparison-view active">
+            <div class="semester-chart">
+              <div class="chart-title">GPA Trend by Semester</div>
+              <div id="semesterBars" class="semester-bars"></div>
+            </div>
+          </div>
+
+          <!-- Detail View -->
+          <div id="detailView" class="comparison-view hidden">
+            <div id="semesterDetails" class="semester-details"></div>
+          </div>
+
+          <!-- Insights View -->
+          <div id="insightsView" class="comparison-view hidden">
+            <div id="semesterInsights" class="semester-insights"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Target GPA Planner -->
       <div class="target-section">
         <h3>Target GPA Planner</h3>
@@ -145,7 +182,18 @@
             <button id="calculateWhatif" class="btn btn-primary">Calculate</button>
           </div>
         </div>
-        <div id="whatifResult" class="whatif-result hidden"></div>
+        <div id="whatifResult" class="whatif-result hidden">
+          <div class="whatif-result-content"></div>
+          <button id="saveWhatifScenario" class="btn btn-secondary btn-small">💾 Save Scenario</button>
+        </div>
+
+        <!-- Saved What-If Scenarios -->
+        <div id="savedScenariosSection" class="whatif-scenarios-section hidden">
+          <h4>Saved Scenarios</h4>
+          <div id="savedScenariosList" class="whatif-scenarios-list">
+            <p class="placeholder">No saved scenarios</p>
+          </div>
+        </div>
       </div>
 
       <!-- Course Impact Preview -->
@@ -154,6 +202,57 @@
         <p class="help-text">See how improving a course affects your GPA</p>
         <div id="courseImpactList" class="impact-list">
           <p class="placeholder">Connect to Canvas to see courses</p>
+        </div>
+      </div>
+
+      <!-- GPA Projection -->
+      <div class="projection-section">
+        <div class="projection-header">
+          <h3>📈 GPA Projection</h3>
+          <button id="toggleProjection" class="btn btn-secondary btn-small" title="Show/hide projection">▼</button>
+        </div>
+
+        <div id="projectionPanel" class="projection-panel">
+          <p class="help-text">Project your cumulative GPA based on upcoming semesters</p>
+
+          <!-- Current Stats Display -->
+          <div class="projection-current">
+            <div class="current-stat">
+              <span class="stat-label">Current Cumulative GPA:</span>
+              <span id="projectionCurrentGPA" class="stat-value">--</span>
+            </div>
+            <div class="current-stat">
+              <span class="stat-label">Total Credits:</span>
+              <span id="projectionCurrentCredits" class="stat-value">--</span>
+            </div>
+          </div>
+
+          <!-- Projection Scenarios -->
+          <div class="projection-scenarios">
+            <h4>Add Semester Projections</h4>
+            <div class="projection-inputs">
+              <div class="input-row">
+                <div class="input-group">
+                  <label for="projectionSemesterName">Semester:</label>
+                  <input type="text" id="projectionSemesterName" placeholder="e.g., Fall 2024" maxlength="30">
+                </div>
+                <div class="input-group">
+                  <label for="projectionSemesterGPA">Expected GPA:</label>
+                  <input type="number" id="projectionSemesterGPA" min="0" max="4" step="0.01" placeholder="3.50">
+                </div>
+                <div class="input-group">
+                  <label for="projectionSemesterCredits">Credits:</label>
+                  <input type="number" id="projectionSemesterCredits" min="0" step="1" placeholder="12">
+                </div>
+              </div>
+              <button id="addProjectionSemester" class="btn btn-primary btn-small">+ Add</button>
+            </div>
+          </div>
+
+          <!-- Projected Scenarios List -->
+          <div id="projectionsList" class="projections-list">
+            <p class="placeholder">Add semesters to see projections</p>
+          </div>
         </div>
       </div>
 
@@ -185,6 +284,41 @@
       <div id="gpaCalculationBreakdown" class="gpa-breakdown"></div>
       <div id="coursesList" class="courses-list">
         <p class="placeholder">Connect to Canvas to view your courses</p>
+      </div>
+
+      <!-- Assignments Tracker -->
+      <div class="assignments-section">
+        <div class="assignments-header">
+          <h3>📋 Assignments & Deadlines</h3>
+          <button id="toggleAssignments" class="btn btn-secondary btn-small" title="Show/hide assignments">▼</button>
+        </div>
+
+        <div id="assignmentsPanel" class="assignments-panel">
+          <!-- Filter Options -->
+          <div class="assignments-filters">
+            <div class="filter-group">
+              <label for="assignmentStatusFilter">Status:</label>
+              <select id="assignmentStatusFilter">
+                <option value="all">All</option>
+                <option value="ungraded">Not Graded</option>
+                <option value="graded">Graded</option>
+                <option value="overdue">Overdue</option>
+                <option value="upcoming">Upcoming</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label for="assignmentCourseFilter">Course:</label>
+              <select id="assignmentCourseFilter">
+                <option value="all">All Courses</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Assignments List -->
+          <div id="assignmentsList" class="assignments-list">
+            <p class="placeholder">No assignments to display</p>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -260,6 +394,33 @@
         <button id="clearCache" class="btn btn-secondary">Clear Cache</button>
         <button id="resetSemesters" class="btn btn-secondary">Reset Semester Detection</button>
         <button id="clearAllData" class="btn btn-danger">Clear All Data</button>
+      </div>
+
+      <!-- Keyboard Shortcuts -->
+      <div class="settings-section">
+        <h3>Keyboard Shortcuts</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>Ctrl</kbd> + <kbd>R</kbd></td>
+            <td>Refresh grades from Canvas</td>
+          </tr>
+          <tr>
+            <td><kbd>Ctrl</kbd> + <kbd>1/2/3</kbd></td>
+            <td>Switch tabs (Dashboard/Courses/Settings)</td>
+          </tr>
+          <tr>
+            <td><kbd>Ctrl</kbd> + <kbd>E</kbd></td>
+            <td>Export data</td>
+          </tr>
+          <tr>
+            <td><kbd>Ctrl</kbd> + <kbd>K</kbd></td>
+            <td>Focus semester filter</td>
+          </tr>
+          <tr>
+            <td><kbd>Esc</kbd></td>
+            <td>Close modals</td>
+          </tr>
+        </table>
       </div>
 
       <!-- Token Help Modal Content -->

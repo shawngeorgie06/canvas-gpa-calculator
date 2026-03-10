@@ -2175,3 +2175,1125 @@ body.dark-mode {
   background: var(--slate-700);
   border-top-color: var(--slate-600);
 }
+
+/* ==================== KEYBOARD SHORTCUTS TABLE ==================== */
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.shortcuts-table tr {
+  border-bottom: 1px solid var(--slate-200);
+}
+
+.shortcuts-table tr:last-child {
+  border-bottom: none;
+}
+
+.shortcuts-table td {
+  padding: 10px 0;
+  font-size: 12px;
+  color: var(--slate-700);
+}
+
+.shortcuts-table td:first-child {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  width: 140px;
+}
+
+.shortcuts-table td:last-child {
+  color: var(--slate-600);
+  padding-left: 12px;
+}
+
+kbd {
+  display: inline-block;
+  padding: 3px 6px;
+  margin: 0 2px;
+  background: var(--slate-100);
+  border: 1px solid var(--slate-300);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--slate-700);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.dark-mode .shortcuts-table tr {
+  border-bottom-color: var(--slate-700);
+}
+
+.dark-mode .shortcuts-table td {
+  color: var(--slate-300);
+}
+
+.dark-mode .shortcuts-table td:last-child {
+  color: var(--slate-400);
+}
+
+.dark-mode kbd {
+  background: var(--slate-700);
+  border-color: var(--slate-600);
+  color: var(--slate-100);
+}
+
+/* Assignments Section Styles */
+.assignments-section {
+  background: var(--slate-50);
+  border-radius: 8px;
+  margin-top: 24px;
+  border: 1px solid var(--slate-200);
+  overflow: hidden;
+}
+
+.assignments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--slate-100) 0%, var(--slate-50) 100%);
+  border-bottom: 1px solid var(--slate-200);
+}
+
+.assignments-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--slate-800);
+}
+
+.assignments-panel {
+  padding: 16px;
+}
+
+.assignments-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+}
+
+.filter-group label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--slate-600);
+  white-space: nowrap;
+}
+
+.filter-group select {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid var(--slate-300);
+  border-radius: 4px;
+  background: white;
+  color: var(--slate-700);
+  cursor: pointer;
+}
+
+.filter-group select:hover {
+  border-color: var(--slate-400);
+}
+
+.filter-group select:focus {
+  outline: none;
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.assignments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.assignment-card {
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  transition: all 0.2s ease;
+}
+
+.assignment-card:hover {
+  border-color: var(--slate-300);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.assignment-status {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+  min-width: 60px;
+  text-align: center;
+}
+
+.status-graded {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
+.status-ungraded {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+}
+
+.status-overdue {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.status-submitted {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+}
+
+.assignment-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.assignment-name {
+  font-weight: 500;
+  color: var(--slate-800);
+  margin-bottom: 6px;
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.assignment-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--slate-600);
+}
+
+.assignment-course {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--slate-100);
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.assignment-due {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.due-date-overdue {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.due-date-soon {
+  color: #d97706;
+  font-weight: 600;
+}
+
+.due-date-normal {
+  color: var(--slate-600);
+}
+
+.assignment-score {
+  padding: 4px 8px;
+  background: var(--slate-100);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--slate-700);
+}
+
+.assignment-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.assignment-actions button {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 4px;
+  border: 1px solid var(--slate-300);
+  background: white;
+  color: var(--slate-600);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.assignment-actions button:hover {
+  border-color: var(--blue-400);
+  color: var(--blue-600);
+  background: var(--blue-50);
+}
+
+/* Dark Mode - Assignments */
+.dark-mode .assignments-section {
+  background: var(--slate-800);
+  border-color: var(--slate-700);
+}
+
+.dark-mode .assignments-header {
+  background: linear-gradient(135deg, var(--slate-700) 0%, var(--slate-800) 100%);
+  border-bottom-color: var(--slate-700);
+}
+
+.dark-mode .assignments-header h3 {
+  color: var(--slate-100);
+}
+
+.dark-mode .assignment-card {
+  background: var(--slate-700);
+  border-color: var(--slate-600);
+  color: var(--slate-200);
+}
+
+.dark-mode .assignment-card:hover {
+  border-color: var(--slate-500);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .assignment-name {
+  color: var(--slate-100);
+}
+
+.dark-mode .assignment-meta {
+  color: var(--slate-400);
+}
+
+.dark-mode .assignment-course {
+  background: var(--slate-600);
+  color: var(--slate-200);
+}
+
+.dark-mode .assignment-score {
+  background: var(--slate-600);
+  color: var(--slate-200);
+}
+
+.dark-mode .filter-group label {
+  color: var(--slate-400);
+}
+
+.dark-mode .filter-group select {
+  background: var(--slate-700);
+  border-color: var(--slate-600);
+  color: var(--slate-100);
+}
+
+.dark-mode .filter-group select:hover {
+  border-color: var(--slate-500);
+}
+
+.dark-mode .filter-group select:focus {
+  border-color: var(--blue-400);
+}
+
+/* GPA Projection Section */
+.projection-section {
+  background: var(--slate-50);
+  border-radius: 8px;
+  margin-top: 24px;
+  border: 1px solid var(--slate-200);
+  overflow: hidden;
+}
+
+.projection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--slate-100) 0%, var(--slate-50) 100%);
+  border-bottom: 1px solid var(--slate-200);
+}
+
+.projection-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--slate-800);
+}
+
+.projection-panel {
+  padding: 16px;
+}
+
+.projection-current {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 20px;
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid var(--slate-200);
+}
+
+.current-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--slate-600);
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--blue-600);
+}
+
+.projection-scenarios {
+  margin-bottom: 20px;
+}
+
+.projection-scenarios h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--slate-800);
+}
+
+.projection-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.projection-inputs .input-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.projection-inputs .input-group {
+  flex: 1;
+  min-width: 100px;
+}
+
+.projection-inputs .input-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--slate-600);
+  margin-bottom: 4px;
+}
+
+.projection-inputs .input-group input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  border: 1px solid var(--slate-300);
+  border-radius: 4px;
+  color: var(--slate-700);
+}
+
+.projection-inputs .input-group input:focus {
+  outline: none;
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.projection-inputs #addProjectionSemester {
+  align-self: flex-end;
+  padding: 8px 16px;
+}
+
+.projections-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.projection-card {
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.projection-card:hover {
+  border-color: var(--slate-300);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.projection-card-info {
+  flex: 1;
+}
+
+.projection-card-semester {
+  font-weight: 600;
+  color: var(--slate-800);
+  margin-bottom: 4px;
+}
+
+.projection-card-details {
+  font-size: 12px;
+  color: var(--slate-600);
+  display: flex;
+  gap: 12px;
+}
+
+.projection-card-results {
+  text-align: right;
+  min-width: 120px;
+}
+
+.projection-card-cumulative {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--blue-600);
+}
+
+.projection-card-label {
+  font-size: 11px;
+  color: var(--slate-600);
+}
+
+.projection-card-remove {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 4px;
+  border: 1px solid var(--slate-300);
+  background: white;
+  color: var(--slate-600);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.projection-card-remove:hover {
+  border-color: #ef4444;
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.projection-timeline {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--slate-100);
+  border-radius: 6px;
+}
+
+.projection-timeline h5 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--slate-700);
+}
+
+.projection-bars {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  height: 60px;
+}
+
+.projection-bar {
+  flex: 1;
+  min-width: 30px;
+  background: var(--blue-400);
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.projection-bar:hover {
+  background: var(--blue-600);
+}
+
+.projection-bar-label {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  white-space: nowrap;
+  color: var(--slate-600);
+  font-weight: 500;
+}
+
+.projection-bar-value {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--slate-800);
+  white-space: nowrap;
+  background: white;
+  padding: 2px 4px;
+  border-radius: 3px;
+  border: 1px solid var(--slate-200);
+}
+
+/* Dark Mode - Projection */
+.dark-mode .projection-section {
+  background: var(--slate-800);
+  border-color: var(--slate-700);
+}
+
+.dark-mode .projection-header {
+  background: linear-gradient(135deg, var(--slate-700) 0%, var(--slate-800) 100%);
+  border-bottom-color: var(--slate-700);
+}
+
+.dark-mode .projection-header h3 {
+  color: var(--slate-100);
+}
+
+.dark-mode .projection-current {
+  background: var(--slate-700);
+  border-color: var(--slate-600);
+}
+
+.dark-mode .stat-label {
+  color: var(--slate-400);
+}
+
+.dark-mode .stat-value {
+  color: var(--blue-400);
+}
+
+.dark-mode .projection-scenarios h4 {
+  color: var(--slate-100);
+}
+
+.dark-mode .projection-inputs .input-group input {
+  background: var(--slate-700);
+  border-color: var(--slate-600);
+  color: var(--slate-100);
+}
+
+.dark-mode .projection-inputs .input-group input:focus {
+  border-color: var(--blue-400);
+}
+
+.dark-mode .projection-card {
+  background: var(--slate-700);
+  border-color: var(--slate-600);
+}
+
+.dark-mode .projection-card:hover {
+  border-color: var(--slate-500);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .projection-card-semester {
+  color: var(--slate-100);
+}
+
+.dark-mode .projection-card-details {
+  color: var(--slate-400);
+}
+
+.dark-mode .projection-timeline {
+  background: var(--slate-700);
+}
+
+.dark-mode .projection-timeline h5 {
+  color: var(--slate-300);
+}
+
+.dark-mode .projection-bar-value {
+  background: var(--slate-700);
+  border-color: var(--slate-600);
+  color: var(--slate-100);
+}
+
+.dark-mode .semester-bar {
+  background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
+  border-color: #1e40af;
+}
+
+.dark-mode .semester-bar-label {
+  color: var(--slate-200);
+}
+
+.dark-mode .semester-chart {
+  background: var(--slate-800);
+  border-color: var(--slate-600);
+}
+
+.dark-mode .chart-title {
+  color: var(--slate-100);
+}
+
+/* Semester Comparison Section */
+.semester-comparison-section {
+  background: var(--slate-50);
+  border-radius: 8px;
+  margin-top: 24px;
+  border: 1px solid var(--slate-200);
+  overflow: hidden;
+}
+
+.comparison-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--slate-100) 0%, var(--slate-50) 100%);
+  border-bottom: 1px solid var(--slate-200);
+}
+
+.comparison-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--slate-800);
+}
+
+.comparison-panel {
+  padding: 16px;
+}
+
+.comparison-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--slate-200);
+}
+
+.comparison-tab {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--slate-600);
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.comparison-tab:hover {
+  color: var(--slate-800);
+}
+
+.comparison-tab.active {
+  color: var(--blue-600);
+  border-bottom-color: var(--blue-600);
+}
+
+.comparison-view {
+  display: none;
+}
+
+.comparison-view.active {
+  display: block;
+}
+
+.comparison-view.hidden {
+  display: none;
+}
+
+.semester-chart {
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 2px solid var(--slate-300);
+  padding: 20px 16px 16px 16px;
+}
+
+.chart-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--slate-900);
+  margin-bottom: 16px;
+}
+
+.semester-bars {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  justify-content: center;
+  height: 220px;
+  padding: 24px 16px 50px 16px;
+  background: #ffffff;
+}
+
+.semester-bar {
+  width: 70px;
+  height: var(--bar-height, 50%);
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  border: 2px solid #1e40af;
+  border-radius: 8px 8px 0 0;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.semester-bar:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.semester-bar-label {
+  position: absolute;
+  bottom: -32px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--slate-800);
+  font-weight: 600;
+  text-align: center;
+  width: 100%;
+  line-height: 1.2;
+}
+
+.semester-bar-value {
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  font-weight: 700;
+  color: white;
+  white-space: nowrap;
+  background: #1e40af;
+  padding: 4px 8px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.semester-details {
+  display: grid;
+  gap: 10px;
+}
+
+.semester-detail-card {
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.semester-detail-card:hover {
+  border-color: var(--slate-300);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.semester-detail-info {
+  flex: 1;
+}
+
+.semester-detail-name {
+  font-weight: 600;
+  color: var(--slate-800);
+  margin-bottom: 4px;
+}
+
+.semester-detail-stats {
+  font-size: 12px;
+  color: var(--slate-600);
+  display: flex;
+  gap: 16px;
+}
+
+.semester-detail-gpa {
+  text-align: right;
+  min-width: 80px;
+}
+
+.semester-detail-gpa-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--blue-600);
+}
+
+.semester-detail-gpa-label {
+  font-size: 10px;
+  color: var(--slate-600);
+}
+
+.semester-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.insight-card {
+  background: white;
+  border-left: 4px solid var(--blue-400);
+  border-radius: 4px;
+  padding: 12px;
+  border: 1px solid var(--slate-200);
+}
+
+.insight-card.positive {
+  border-left-color: #10b981;
+}
+
+.insight-card.negative {
+  border-left-color: #ef4444;
+}
+
+.insight-card.neutral {
+  border-left-color: var(--slate-400);
+}
+
+.insight-title {
+  font-weight: 600;
+  color: var(--slate-800);
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.insight-text {
+  font-size: 12px;
+  color: var(--slate-600);
+}
+
+.insight-highlight {
+  font-weight: 500;
+  color: var(--slate-800);
+}
+
+/* Dark Mode - Semester Comparison */
+.dark-mode .semester-comparison-section {
+  background: var(--slate-800);
+  border-color: var(--slate-700);
+}
+
+.dark-mode .comparison-header {
+  background: linear-gradient(135deg, var(--slate-700) 0%, var(--slate-800) 100%);
+  border-bottom-color: var(--slate-700);
+}
+
+.dark-mode .comparison-header h3 {
+  color: var(--slate-100);
+}
+
+.dark-mode .comparison-tabs {
+  border-bottom-color: var(--slate-700);
+}
+
+.dark-mode .comparison-tab {
+  color: var(--slate-400);
+}
+
+.dark-mode .comparison-tab:hover {
+  color: var(--slate-200);
+}
+
+.dark-mode .comparison-tab.active {
+  color: var(--blue-400);
+  border-bottom-color: var(--blue-400);
+}
+
+.dark-mode .semester-chart {
+  background: var(--slate-700);
+  border-color: var(--slate-600);
+}
+
+.dark-mode .chart-title {
+  color: var(--slate-100);
+}
+
+.dark-mode .semester-detail-card {
+  background: var(--slate-700);
+  border-color: var(--slate-600);
+}
+
+.dark-mode .semester-detail-card:hover {
+  border-color: var(--slate-500);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .semester-detail-name {
+  color: var(--slate-100);
+}
+
+.dark-mode .semester-detail-stats {
+  color: var(--slate-400);
+}
+
+.dark-mode .insight-card {
+  background: var(--slate-700);
+  border-color: var(--slate-600);
+}
+
+.dark-mode .insight-title {
+  color: var(--slate-100);
+}
+
+.dark-mode .insight-text {
+  color: var(--slate-400);
+}
+
+.dark-mode .insight-highlight {
+  color: var(--slate-200);
+}
+
+/* What-If Scenarios */
+.whatif-scenarios-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--slate-200);
+}
+
+.whatif-scenarios-section.hidden {
+  display: none;
+}
+
+.whatif-scenarios-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--slate-800);
+}
+
+.whatif-scenarios-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.whatif-scenario-card {
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.whatif-scenario-card:hover {
+  border-color: var(--slate-300);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.whatif-scenario-info {
+  flex: 1;
+}
+
+.whatif-scenario-course {
+  font-weight: 600;
+  color: var(--slate-800);
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.whatif-scenario-details {
+  font-size: 12px;
+  color: var(--slate-600);
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.whatif-scenario-result {
+  padding: 4px 8px;
+  background: var(--slate-100);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--slate-700);
+}
+
+.whatif-scenario-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.whatif-scenario-actions button {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 4px;
+  border: 1px solid var(--slate-300);
+  background: white;
+  color: var(--slate-600);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.whatif-scenario-actions button:hover {
+  border-color: #ef4444;
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.whatif-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.whatif-result-content {
+  flex: 1;
+}
+
+.whatif-result #saveWhatifScenario {
+  white-space: nowrap;
+  margin-top: 0;
+  align-self: flex-start;
+}
+
+/* Dark Mode - What-If Scenarios */
+.dark-mode .whatif-scenarios-section {
+  border-top-color: var(--slate-700);
+}
+
+.dark-mode .whatif-scenarios-section h4 {
+  color: var(--slate-100);
+}
+
+.dark-mode .whatif-scenario-card {
+  background: var(--slate-700);
+  border-color: var(--slate-600);
+}
+
+.dark-mode .whatif-scenario-card:hover {
+  border-color: var(--slate-500);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .whatif-scenario-course {
+  color: var(--slate-100);
+}
+
+.dark-mode .whatif-scenario-details {
+  color: var(--slate-400);
+}
+
+.dark-mode .whatif-scenario-result {
+  background: var(--slate-600);
+  color: var(--slate-200);
+}

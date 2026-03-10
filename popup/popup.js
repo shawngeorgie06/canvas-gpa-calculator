@@ -68,6 +68,8 @@ const state = {
   allCourses: [],      // All courses from Canvas
   courses: [],         // Filtered courses for current semester
   semesters: [],       // Available semesters
+  assignments: [],     // Loaded assignments from Canvas
+  projections: [],     // GPA projection scenarios
   selectedSemester: 'all',
   semesterGPA: null,
   cumulativeGPA: null,
@@ -154,7 +156,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initializeSyncStatus();
   await initializeGradingScale();
   await initializePopup();
+  await initializeProjections();
+  await loadAndDisplayWhatifScenarios();
   setupEventListeners();
+  setupKeyboardShortcuts();
   setupAutoSyncListener();
 });
 
@@ -528,6 +533,40 @@ async function initializePopup() {
     } else {
       showStatus('info', 'Please connect to Canvas in Settings to get started.');
     }
+
+    // Initialize assignments panel visibility
+    const { assignmentsPanelOpen = true } = await chrome.storage.local.get('assignmentsPanelOpen');
+    const assignmentsPanel = document.getElementById('assignmentsPanel');
+    const toggleAssignmentsBtn = document.getElementById('toggleAssignments');
+    if (assignmentsPanel) {
+      assignmentsPanel.style.display = assignmentsPanelOpen ? 'block' : 'none';
+      if (toggleAssignmentsBtn) {
+        toggleAssignmentsBtn.textContent = assignmentsPanelOpen ? '▼' : '▶';
+      }
+    }
+
+    // Initialize projection panel visibility
+    const { projectionPanelOpen = true } = await chrome.storage.local.get('projectionPanelOpen');
+    const projectionPanel = document.getElementById('projectionPanel');
+    const toggleProjectionBtn = document.getElementById('toggleProjection');
+    if (projectionPanel) {
+      projectionPanel.style.display = projectionPanelOpen ? 'block' : 'none';
+      if (toggleProjectionBtn) {
+        toggleProjectionBtn.textContent = projectionPanelOpen ? '▼' : '▶';
+      }
+    }
+
+    // Initialize semester comparison panel visibility
+    const { comparisonPanelOpen = true } = await chrome.storage.local.get('comparisonPanelOpen');
+    const comparisonPanel = document.getElementById('comparisonPanel');
+    const toggleComparisonBtn = document.getElementById('toggleComparison');
+    if (comparisonPanel) {
+      comparisonPanel.style.display = comparisonPanelOpen ? 'block' : 'none';
+      if (toggleComparisonBtn) {
+        toggleComparisonBtn.textContent = comparisonPanelOpen ? '▼' : '▶';
+      }
+    }
+
   } catch (error) {
     console.error('Initialization error:', error);
     showStatus('error', 'Failed to initialize. Please try again.');
@@ -592,12 +631,14 @@ function setupEventListeners() {
     state.selectedSemester = e.target.value;
     elements.courseSemesterSelect.value = e.target.value;
     filterCoursesBySemester();
+    loadAssignments(); // Reload assignments for new semester
   });
 
   elements.courseSemesterSelect.addEventListener('change', (e) => {
     state.selectedSemester = e.target.value;
     elements.semesterSelect.value = e.target.value;
     filterCoursesBySemester();
+    loadAssignments(); // Reload assignments for new semester
   });
 
   // Add course button
@@ -702,6 +743,193 @@ function setupEventListeners() {
     if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
       await Storage.clear();
       location.reload();
+    }
+  });
+
+  // Assignment tracker events
+  const toggleAssignmentsBtn = document.getElementById('toggleAssignments');
+  const assignmentsPanel = document.getElementById('assignmentsPanel');
+
+  if (toggleAssignmentsBtn) {
+    toggleAssignmentsBtn.addEventListener('click', () => {
+      if (assignmentsPanel) {
+        const isHidden = assignmentsPanel.style.display === 'none';
+        assignmentsPanel.style.display = isHidden ? 'block' : 'none';
+        toggleAssignmentsBtn.textContent = isHidden ? '▼' : '▶';
+        // Save preference
+        chrome.storage.local.set({ assignmentsPanelOpen: isHidden });
+      }
+    });
+  }
+
+  // Assignment filter listeners
+  const assignmentStatusFilter = document.getElementById('assignmentStatusFilter');
+  const assignmentCourseFilter = document.getElementById('assignmentCourseFilter');
+
+  if (assignmentStatusFilter) {
+    assignmentStatusFilter.addEventListener('change', () => {
+      if (state.assignments) {
+        const filtered = filterAssignments(state.assignments);
+        renderAssignments(filtered);
+      }
+    });
+  }
+
+  if (assignmentCourseFilter) {
+    assignmentCourseFilter.addEventListener('change', () => {
+      if (state.assignments) {
+        const filtered = filterAssignments(state.assignments);
+        renderAssignments(filtered);
+      }
+    });
+  }
+
+  // Projection panel toggle
+  const toggleProjectionBtn = document.getElementById('toggleProjection');
+  const projectionPanel = document.getElementById('projectionPanel');
+
+  if (toggleProjectionBtn) {
+    toggleProjectionBtn.addEventListener('click', () => {
+      if (projectionPanel) {
+        const isHidden = projectionPanel.style.display === 'none';
+        projectionPanel.style.display = isHidden ? 'block' : 'none';
+        toggleProjectionBtn.textContent = isHidden ? '▼' : '▶';
+        // Save preference
+        chrome.storage.local.set({ projectionPanelOpen: isHidden });
+      }
+    });
+  }
+
+  // Add projection button
+  const addProjectionBtn = document.getElementById('addProjectionSemester');
+  if (addProjectionBtn) {
+    addProjectionBtn.addEventListener('click', addProjectionScenario);
+  }
+
+  // Allow Enter key in projection inputs
+  const projectionInputs = ['projectionSemesterName', 'projectionSemesterGPA', 'projectionSemesterCredits'];
+  projectionInputs.forEach(inputId => {
+    const input = document.getElementById(inputId);
+    if (input) {
+      input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          addProjectionScenario();
+        }
+      });
+    }
+  });
+
+  // Semester comparison toggle
+  const toggleComparisonBtn = document.getElementById('toggleComparison');
+  const comparisonPanel = document.getElementById('comparisonPanel');
+
+  if (toggleComparisonBtn) {
+    toggleComparisonBtn.addEventListener('click', () => {
+      if (comparisonPanel) {
+        const isHidden = comparisonPanel.style.display === 'none';
+        comparisonPanel.style.display = isHidden ? 'block' : 'none';
+        toggleComparisonBtn.textContent = isHidden ? '▼' : '▶';
+        // Save preference
+        chrome.storage.local.set({ comparisonPanelOpen: isHidden });
+      }
+    });
+  }
+
+  // Semester comparison tab switching
+  const comparisonTabs = document.querySelectorAll('.comparison-tab');
+  const comparisonViews = document.querySelectorAll('.comparison-view');
+
+  comparisonTabs.forEach(tab => {
+    tab.addEventListener('click', (e) => {
+      const viewName = tab.dataset.view;
+
+      // Update active tab
+      comparisonTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      // Update active view
+      comparisonViews.forEach(view => {
+        view.classList.remove('active');
+        view.classList.add('hidden');
+      });
+
+      const activeView = document.getElementById(viewName + 'View');
+      if (activeView) {
+        activeView.classList.add('active');
+        activeView.classList.remove('hidden');
+      }
+    });
+  });
+
+  // What-If scenario saving
+  const saveWhatifBtn = document.getElementById('saveWhatifScenario');
+  if (saveWhatifBtn) {
+    saveWhatifBtn.addEventListener('click', saveWhatifScenario);
+  }
+}
+
+/**
+ * Setup keyboard shortcuts
+ */
+function setupKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    // Don't trigger shortcuts if user is typing in an input field
+    const isInputActive = document.activeElement.tagName === 'INPUT' ||
+                          document.activeElement.tagName === 'TEXTAREA' ||
+                          document.activeElement.tagName === 'SELECT';
+
+    // Ctrl/Cmd + R: Refresh data
+    if ((e.ctrlKey || e.metaKey) && e.key === 'r' && !e.shiftKey && !isInputActive) {
+      e.preventDefault();
+      if (state.isConnected && !state.isLoading) {
+        elements.refreshBtn.click();
+      }
+    }
+
+    // Ctrl/Cmd + 1: Dashboard tab
+    if ((e.ctrlKey || e.metaKey) && e.key === '1' && !isInputActive) {
+      e.preventDefault();
+      switchTab('dashboard');
+    }
+
+    // Ctrl/Cmd + 2: Courses tab
+    if ((e.ctrlKey || e.metaKey) && e.key === '2' && !isInputActive) {
+      e.preventDefault();
+      switchTab('courses');
+    }
+
+    // Ctrl/Cmd + 3: Settings tab
+    if ((e.ctrlKey || e.metaKey) && e.key === '3' && !isInputActive) {
+      e.preventDefault();
+      switchTab('settings');
+    }
+
+    // Ctrl/Cmd + E: Export data
+    if ((e.ctrlKey || e.metaKey) && e.key === 'e' && !e.shiftKey && !isInputActive) {
+      e.preventDefault();
+      exportData();
+    }
+
+    // Ctrl/Cmd + K: Focus semester filter
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k' && !isInputActive) {
+      e.preventDefault();
+      const activeTab = document.querySelector('.tab.active');
+      const tabId = activeTab?.dataset.tab;
+
+      // Focus the appropriate semester select based on active tab
+      if (tabId === 'courses' && elements.courseSemesterSelect) {
+        elements.courseSemesterSelect.focus();
+      } else if (elements.semesterSelect) {
+        elements.semesterSelect.focus();
+      }
+    }
+
+    // Esc: Close error modal
+    if (e.key === 'Escape') {
+      const errorModal = document.getElementById('errorModal');
+      if (errorModal && !errorModal.classList.contains('hidden')) {
+        closeErrorModal();
+      }
     }
   });
 }
@@ -951,6 +1179,9 @@ async function loadCoursesData() {
 
     // Filter and display
     filterCoursesBySemester();
+
+    // Load and display assignments
+    await loadAssignments();
 
     // Update last sync info
     await updateLastSyncInfo();
@@ -1203,6 +1434,11 @@ async function updateGPADisplay() {
   if (elements.totalCredits) {
     elements.totalCredits.innerHTML = `${displayTotalCredits} total credits ${cumCreditsHasOverride ? '(edited)' : ''} ✏️`;
   }
+
+  // Update projections and comparison with new GPA data
+  state.totalCredits = displayTotalCredits;
+  updateProjectionDisplay();
+  updateSemesterComparison();
 
   // Update exclude button text
   if (elements.manageExcludedBtn) {
@@ -2526,6 +2762,752 @@ function validateImportData(data) {
   const hasExpectedFields = expectedFields.some(field => field in data);
 
   return hasExpectedFields;
+}
+
+/**
+ * Load and display assignments for courses
+ */
+async function loadAssignments() {
+  try {
+    if (!state.isConnected || state.allCourses.length === 0) {
+      return;
+    }
+
+    // Get courses for current semester
+    const coursesToCheck = state.selectedSemester === 'all'
+      ? state.allCourses
+      : state.courses;
+
+    if (coursesToCheck.length === 0) {
+      renderAssignments([]);
+      return;
+    }
+
+    // Fetch assignments for all courses in parallel
+    const assignmentPromises = coursesToCheck.map(course =>
+      fetchCourseAssignments(course)
+        .catch(err => {
+          console.warn(`Failed to fetch assignments for ${course.name}:`, err);
+          return [];
+        })
+    );
+
+    const allAssignments = await Promise.all(assignmentPromises);
+    const flattenedAssignments = allAssignments.flat();
+
+    // Store assignments in state for filtering
+    state.assignments = flattenedAssignments;
+
+    // Populate course filter dropdown
+    populateAssignmentCourseFilter(coursesToCheck);
+
+    // Render with current filters
+    const filtered = filterAssignments(flattenedAssignments);
+    renderAssignments(filtered);
+
+  } catch (error) {
+    console.error('[Assignments] Error loading assignments:', error);
+  }
+}
+
+/**
+ * Fetch assignments for a single course
+ */
+async function fetchCourseAssignments(course) {
+  try {
+    const assignments = await CanvasAPI.getAssignments(course.id);
+
+    return assignments
+      .filter(a => a.points_possible && a.points_possible > 0) // Only graded assignments
+      .map(assignment => {
+        const submission = assignment.submission;
+        const dueDate = assignment.due_at ? new Date(assignment.due_at) : null;
+        const now = new Date();
+        const daysUntilDue = dueDate ? Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24)) : null;
+
+        return {
+          id: assignment.id,
+          name: assignment.name,
+          courseId: course.id,
+          courseName: course.name,
+          pointsPossible: assignment.points_possible,
+          dueDate,
+          daysUntilDue,
+          score: submission?.score || null,
+          submitted: submission?.submitted_at ? new Date(submission.submitted_at) : null,
+          graded: submission?.workflow_state === 'graded' || submission?.grade !== null,
+          excused: submission?.excused || false,
+          missing: submission?.missing || false
+        };
+      });
+
+  } catch (error) {
+    console.warn(`[Assignments] Failed to fetch for course ${course.id}:`, error);
+    return [];
+  }
+}
+
+/**
+ * Filter assignments based on selected filters
+ */
+function filterAssignments(assignments) {
+  const statusFilter = document.getElementById('assignmentStatusFilter')?.value || 'all';
+  const courseFilter = document.getElementById('assignmentCourseFilter')?.value || 'all';
+
+  return assignments.filter(a => {
+    // Course filter
+    if (courseFilter !== 'all' && a.courseId !== parseInt(courseFilter)) {
+      return false;
+    }
+
+    // Status filter
+    if (statusFilter === 'graded' && !a.graded) return false;
+    if (statusFilter === 'ungraded' && a.graded) return false;
+    if (statusFilter === 'overdue' && (!a.daysUntilDue || a.daysUntilDue >= 0)) return false;
+    if (statusFilter === 'upcoming' && (!a.daysUntilDue || a.daysUntilDue < 0)) return false;
+
+    return true;
+  });
+}
+
+/**
+ * Populate course filter dropdown
+ */
+function populateAssignmentCourseFilter(courses) {
+  const courseFilter = document.getElementById('assignmentCourseFilter');
+  if (!courseFilter) return;
+
+  const currentValue = courseFilter.value;
+  courseFilter.innerHTML = '<option value="all">All Courses</option>';
+
+  courses.forEach(course => {
+    const option = document.createElement('option');
+    option.value = course.id;
+    option.textContent = course.name;
+    courseFilter.appendChild(option);
+  });
+
+  courseFilter.value = currentValue;
+}
+
+/**
+ * Get status badge text and class for assignment
+ */
+function getAssignmentStatus(assignment) {
+  if (assignment.excused) {
+    return { text: 'Excused', class: 'status-submitted' };
+  }
+  if (assignment.missing) {
+    return { text: 'Missing', class: 'status-overdue' };
+  }
+  if (!assignment.dueDate) {
+    return { text: 'No Due Date', class: 'status-submitted' };
+  }
+  if (assignment.daysUntilDue < 0) {
+    return { text: 'Overdue', class: 'status-overdue' };
+  }
+  if (!assignment.graded) {
+    return { text: 'Ungraded', class: 'status-ungraded' };
+  }
+  return { text: 'Graded', class: 'status-graded' };
+}
+
+/**
+ * Format due date display
+ */
+function formatDueDate(assignment) {
+  if (!assignment.dueDate) {
+    return 'No due date';
+  }
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dueDay = new Date(assignment.dueDate.getFullYear(), assignment.dueDate.getMonth(), assignment.dueDate.getDate());
+  const diffTime = dueDay - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return `${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? 's' : ''} ago`;
+  } else if (diffDays === 0) {
+    return 'Due today';
+  } else if (diffDays === 1) {
+    return 'Due tomorrow';
+  } else if (diffDays <= 7) {
+    return `Due in ${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+  } else {
+    return assignment.dueDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+}
+
+/**
+ * Render assignment cards
+ */
+function renderAssignments(assignments) {
+  const container = document.getElementById('assignmentsList');
+  if (!container) return;
+
+  if (assignments.length === 0) {
+    container.innerHTML = '<p class="placeholder">No assignments to display</p>';
+    return;
+  }
+
+  // Sort by due date (upcoming first)
+  const sorted = [...assignments].sort((a, b) => {
+    if (!a.dueDate && !b.dueDate) return 0;
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return a.dueDate - b.dueDate;
+  });
+
+  container.innerHTML = '';
+
+  sorted.forEach(assignment => {
+    const status = getAssignmentStatus(assignment);
+    const dueText = formatDueDate(assignment);
+    const scoreText = assignment.score !== null
+      ? `${assignment.score}/${assignment.pointsPossible}`
+      : '--/'+assignment.pointsPossible;
+
+    const card = document.createElement('div');
+    card.className = 'assignment-card';
+    card.innerHTML = `
+      <div class="assignment-status ${status.class}">${status.text}</div>
+      <div class="assignment-details">
+        <div class="assignment-name">${escapeHtml(assignment.name)}</div>
+        <div class="assignment-meta">
+          <span class="assignment-course">${escapeHtml(assignment.courseName)}</span>
+          <span class="assignment-due">📅 <span class="${assignment.daysUntilDue < 0 ? 'due-date-overdue' : assignment.daysUntilDue <= 2 ? 'due-date-soon' : 'due-date-normal'}">${dueText}</span></span>
+          <span class="assignment-score">📊 ${scoreText}</span>
+        </div>
+      </div>
+    `;
+
+    container.appendChild(card);
+  });
+}
+
+/**
+ * Helper to escape HTML in strings
+ */
+function escapeHtml(text) {
+  if (!text) return '';
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+/**
+ * Update semester comparison display
+ */
+function updateSemesterComparison() {
+  const { cumulativeGPA } = state;
+  if (!cumulativeGPA || !cumulativeGPA.semesterGPAList) {
+    return;
+  }
+
+  // Get only real semesters (not unknown/other)
+  const semesterData = cumulativeGPA.semesterGPAList.filter(s => isRealSemester(s.semester));
+
+  if (semesterData.length === 0) {
+    return;
+  }
+
+  // Render all views
+  renderSemesterTrendView(semesterData);
+  renderSemesterDetailView(semesterData);
+  renderSemesterInsights(semesterData);
+}
+
+/**
+ * Render semester trend visualization
+ */
+function renderSemesterTrendView(semesterData) {
+  const barsContainer = document.getElementById('semesterBars');
+  if (!barsContainer) return;
+
+  barsContainer.innerHTML = '';
+
+  // Find min/max GPA for scaling
+  const gpas = semesterData.map(s => s.gpa);
+  const maxGPA = Math.max(...gpas, 4);
+  const minGPA = Math.min(...gpas, 0);
+
+  semesterData.forEach(semester => {
+    const barHeight = (semester.gpa / maxGPA) * 100;
+    const bar = document.createElement('div');
+    bar.className = 'semester-bar';
+    bar.style.setProperty('--bar-height', barHeight + '%');
+
+    // Extract semester name (e.g., "Fall 2023" -> "Fall 23")
+    const shortName = semester.semester
+      .replace(/(\d{4})/, (year) => "'" + year.slice(-2))
+      .replace(/\s+/g, '\n');
+
+    bar.innerHTML = `
+      <div class="semester-bar-value">${semester.gpa.toFixed(2)}</div>
+      <div class="semester-bar-label">${shortName}</div>
+    `;
+
+    barsContainer.appendChild(bar);
+  });
+}
+
+/**
+ * Render semester detail cards
+ */
+function renderSemesterDetailView(semesterData) {
+  const detailsContainer = document.getElementById('semesterDetails');
+  if (!detailsContainer) return;
+
+  detailsContainer.innerHTML = '';
+
+  semesterData.forEach(semester => {
+    const card = document.createElement('div');
+    card.className = 'semester-detail-card';
+    card.innerHTML = `
+      <div class="semester-detail-info">
+        <div class="semester-detail-name">${escapeHtml(semester.semester)}</div>
+        <div class="semester-detail-stats">
+          <span>GPA: <strong>${semester.gpa.toFixed(2)}</strong></span>
+          <span>Credits: <strong>${semester.credits}</strong></span>
+        </div>
+      </div>
+      <div class="semester-detail-gpa">
+        <div class="semester-detail-gpa-value">${semester.gpa.toFixed(2)}</div>
+        <div class="semester-detail-gpa-label">Semester GPA</div>
+      </div>
+    `;
+
+    detailsContainer.appendChild(card);
+  });
+}
+
+/**
+ * Calculate and render semester insights
+ */
+function renderSemesterInsights(semesterData) {
+  const insightsContainer = document.getElementById('semesterInsights');
+  if (!insightsContainer) return;
+
+  insightsContainer.innerHTML = '';
+
+  if (semesterData.length === 0) {
+    return;
+  }
+
+  // Find best and worst semesters
+  const bestSemester = semesterData.reduce((max, s) => s.gpa > max.gpa ? s : max);
+  const worstSemester = semesterData.reduce((min, s) => s.gpa < min.gpa ? s : min);
+
+  // Calculate trend (average of first half vs second half)
+  const midpoint = Math.floor(semesterData.length / 2);
+  const firstHalf = semesterData.slice(0, midpoint);
+  const secondHalf = semesterData.slice(midpoint);
+
+  const firstHalfAvg = firstHalf.length > 0
+    ? firstHalf.reduce((sum, s) => sum + s.gpa, 0) / firstHalf.length
+    : 0;
+  const secondHalfAvg = secondHalf.length > 0
+    ? secondHalf.reduce((sum, s) => sum + s.gpa, 0) / secondHalf.length
+    : 0;
+
+  const trendDifference = secondHalfAvg - firstHalfAvg;
+  const trendDirection = trendDifference > 0.05 ? 'positive' : trendDifference < -0.05 ? 'negative' : 'neutral';
+
+  // Best Semester Insight
+  const bestInsight = document.createElement('div');
+  bestInsight.className = 'insight-card positive';
+  bestInsight.innerHTML = `
+    <div class="insight-title">🌟 Best Performance</div>
+    <div class="insight-text">
+      Your best semester was <span class="insight-highlight">${escapeHtml(bestSemester.semester)}</span>
+      with a GPA of <span class="insight-highlight">${bestSemester.gpa.toFixed(2)}</span>
+      over ${bestSemester.credits} credits.
+    </div>
+  `;
+  insightsContainer.appendChild(bestInsight);
+
+  // Worst Semester Insight
+  const worstInsight = document.createElement('div');
+  worstInsight.className = 'insight-card negative';
+  worstInsight.innerHTML = `
+    <div class="insight-title">📉 Challenging Period</div>
+    <div class="insight-text">
+      Your most challenging semester was <span class="insight-highlight">${escapeHtml(worstSemester.semester)}</span>
+      with a GPA of <span class="insight-highlight">${worstSemester.gpa.toFixed(2)}</span>.
+    </div>
+  `;
+  insightsContainer.appendChild(worstInsight);
+
+  // Trend Insight
+  const trendInsight = document.createElement('div');
+  trendInsight.className = `insight-card ${trendDirection}`;
+
+  let trendText = '';
+  if (trendDirection === 'positive') {
+    trendText = `You're on an <span class="insight-highlight">upward trend</span>, improving by an average of ${Math.abs(trendDifference).toFixed(2)} GPA points in your recent semesters.`;
+  } else if (trendDirection === 'negative') {
+    trendText = `Your grades have been <span class="insight-highlight">declining</span> by an average of ${Math.abs(trendDifference).toFixed(2)} GPA points. Consider additional study strategies.`;
+  } else {
+    trendText = `Your performance has been <span class="insight-highlight">consistent</span> across your semesters.`;
+  }
+
+  trendInsight.innerHTML = `
+    <div class="insight-title">📈 Academic Trend</div>
+    <div class="insight-text">${trendText}</div>
+  `;
+  insightsContainer.appendChild(trendInsight);
+
+  // Total Semesters Insight
+  const totalInsight = document.createElement('div');
+  totalInsight.className = 'insight-card neutral';
+  totalInsight.innerHTML = `
+    <div class="insight-title">📚 Academic Record</div>
+    <div class="insight-text">
+      You have completed <span class="insight-highlight">${semesterData.length}</span> semester${semesterData.length !== 1 ? 's' : ''}
+      with a total of <span class="insight-highlight">${semesterData.reduce((sum, s) => sum + s.credits, 0)}</span> credits earned.
+    </div>
+  `;
+  insightsContainer.appendChild(totalInsight);
+}
+
+/**
+ * Initialize projection data from storage
+ */
+async function initializeProjections() {
+  try {
+    const { gpaProjections = [] } = await chrome.storage.local.get('gpaProjections');
+    state.projections = gpaProjections;
+    updateProjectionDisplay();
+  } catch (error) {
+    console.error('[Projection] Error loading projections:', error);
+  }
+}
+
+/**
+ * Add a new projection scenario
+ */
+async function addProjectionScenario() {
+  try {
+    const semesterName = document.getElementById('projectionSemesterName')?.value?.trim();
+    const semesterGPA = parseFloat(document.getElementById('projectionSemesterGPA')?.value || 0);
+    const semesterCredits = parseInt(document.getElementById('projectionSemesterCredits')?.value || 0);
+
+    // Validation
+    if (!semesterName) {
+      alert('Please enter a semester name');
+      return;
+    }
+    if (semesterGPA < 0 || semesterGPA > 4) {
+      alert('GPA must be between 0 and 4.0');
+      return;
+    }
+    if (semesterCredits <= 0) {
+      alert('Credits must be greater than 0');
+      return;
+    }
+
+    // Create projection scenario
+    const scenario = {
+      id: Date.now(),
+      semesterName,
+      semesterGPA,
+      semesterCredits,
+      projectedCumulativeGPA: calculateProjectedGPA(semesterGPA, semesterCredits),
+      addedAt: new Date().toISOString()
+    };
+
+    state.projections.push(scenario);
+
+    // Save to storage
+    await chrome.storage.local.set({ gpaProjections: state.projections });
+
+    // Clear inputs
+    document.getElementById('projectionSemesterName').value = '';
+    document.getElementById('projectionSemesterGPA').value = '';
+    document.getElementById('projectionSemesterCredits').value = '';
+
+    // Update display
+    updateProjectionDisplay();
+    showStatus('success', `Projection added for ${semesterName}`);
+
+  } catch (error) {
+    console.error('[Projection] Error adding scenario:', error);
+    showStatus('error', 'Failed to add projection scenario');
+  }
+}
+
+/**
+ * Calculate projected cumulative GPA
+ */
+function calculateProjectedGPA(futureGPA, futureCredits) {
+  // Get current cumulative GPA and credits
+  const currentGPA = state.cumulativeGPA?.cumulativeGPA ?? 0;
+  const currentCredits = state.cumulativeGPA?.totalCredits ?? state.totalCredits ?? 0;
+
+  if (currentCredits === 0 && futureCredits === 0) return 0;
+  if (currentCredits === 0) return futureGPA;
+
+  // Weighted average: (currentGPA * currentCredits + futureGPA * futureCredits) / (currentCredits + futureCredits)
+  const projectedGPA = (currentGPA * currentCredits + futureGPA * futureCredits) / (currentCredits + futureCredits);
+  return Math.round(projectedGPA * 100) / 100;
+}
+
+/**
+ * Remove a projection scenario
+ */
+async function removeProjection(projectionId) {
+  try {
+    state.projections = state.projections.filter(p => p.id !== projectionId);
+    await chrome.storage.local.set({ gpaProjections: state.projections });
+    updateProjectionDisplay();
+    showStatus('success', 'Projection removed');
+  } catch (error) {
+    console.error('[Projection] Error removing scenario:', error);
+  }
+}
+
+/**
+ * Update projection display
+ */
+function updateProjectionDisplay() {
+  const container = document.getElementById('projectionsList');
+  if (!container) return;
+
+  // Update current stats
+  const currentGPAEl = document.getElementById('projectionCurrentGPA');
+  const currentCreditsEl = document.getElementById('projectionCurrentCredits');
+
+  if (currentGPAEl) {
+    const gpaValue = state.cumulativeGPA?.cumulativeGPA ?? null;
+    currentGPAEl.textContent = gpaValue !== null ? gpaValue.toFixed(2) : '--';
+  }
+  if (currentCreditsEl) {
+    const creditsValue = state.cumulativeGPA?.totalCredits ?? state.totalCredits ?? 0;
+    currentCreditsEl.textContent = creditsValue.toLocaleString();
+  }
+
+  // Render projections
+  if (state.projections.length === 0) {
+    container.innerHTML = '<p class="placeholder">Add semesters to see projections</p>';
+    return;
+  }
+
+  container.innerHTML = '';
+
+  state.projections.forEach(projection => {
+    const card = document.createElement('div');
+    card.className = 'projection-card';
+    card.innerHTML = `
+      <div class="projection-card-info">
+        <div class="projection-card-semester">${escapeHtml(projection.semesterName)}</div>
+        <div class="projection-card-details">
+          <span>Expected GPA: <strong>${projection.semesterGPA.toFixed(2)}</strong></span>
+          <span>Credits: <strong>${projection.semesterCredits}</strong></span>
+        </div>
+      </div>
+      <div class="projection-card-results">
+        <div class="projection-card-cumulative">${projection.projectedCumulativeGPA.toFixed(2)}</div>
+        <div class="projection-card-label">Projected Cumulative</div>
+      </div>
+      <button class="projection-card-remove" onclick="removeProjection(${projection.id})">Remove</button>
+    `;
+    container.appendChild(card);
+  });
+
+  // Add timeline visualization if there are projections
+  if (state.projections.length > 0) {
+    addProjectionTimeline();
+  }
+}
+
+/**
+ * Add visual timeline for projections
+ */
+function addProjectionTimeline() {
+  const container = document.getElementById('projectionsList');
+  if (!container || state.projections.length === 0) return;
+
+  const timelineSection = document.createElement('div');
+  timelineSection.className = 'projection-timeline';
+  timelineSection.innerHTML = `
+    <h5>GPA Progression</h5>
+    <div class="projection-bars"></div>
+  `;
+
+  const barsContainer = timelineSection.querySelector('.projection-bars');
+
+  // Add current GPA bar
+  if (state.cumulativeGPA !== null && state.cumulativeGPA > 0) {
+    const currentBar = document.createElement('div');
+    currentBar.className = 'projection-bar';
+    currentBar.style.height = (state.cumulativeGPA / 4 * 100) + '%';
+    currentBar.innerHTML = `
+      <div class="projection-bar-value">${state.cumulativeGPA.toFixed(2)}</div>
+      <div class="projection-bar-label">Current</div>
+    `;
+    barsContainer.appendChild(currentBar);
+  }
+
+  // Add projection bars
+  state.projections.forEach((projection, index) => {
+    const bar = document.createElement('div');
+    bar.className = 'projection-bar';
+    bar.style.height = (projection.projectedCumulativeGPA / 4 * 100) + '%';
+    bar.innerHTML = `
+      <div class="projection-bar-value">${projection.projectedCumulativeGPA.toFixed(2)}</div>
+      <div class="projection-bar-label">${escapeHtml(projection.semesterName.split(' ')[0])}</div>
+    `;
+    barsContainer.appendChild(bar);
+  });
+
+  container.appendChild(timelineSection);
+}
+
+/**
+ * Save current what-if scenario
+ */
+async function saveWhatifScenario() {
+  try {
+    const course = document.getElementById('whatifCourse').value;
+    const courseSelect = document.getElementById('whatifCourse');
+    const courseName = courseSelect.selectedOptions[0]?.textContent || 'Unknown Course';
+
+    if (!course) {
+      alert('Please select a course');
+      return;
+    }
+
+    const currentGrade = parseFloat(document.getElementById('whatifCurrent')?.value || 0);
+    const finalWeight = parseFloat(document.getElementById('whatifFinalWeight')?.value || 0);
+    const desiredGrade = parseFloat(document.getElementById('whatifDesired')?.value || 0);
+
+    // Get the last calculated result from the DOM
+    const resultElement = document.querySelector('.whatif-result-content');
+    if (!resultElement || resultElement.textContent.trim() === '') {
+      alert('Please calculate a what-if scenario first');
+      return;
+    }
+
+    // Extract required final grade from the result
+    const resultText = resultElement.textContent;
+    const requiredMatch = resultText.match(/need[^0-9]*(\d+(?:\.\d+)?)/i);
+    const requiredGrade = requiredMatch ? parseFloat(requiredMatch[1]) : null;
+
+    if (requiredGrade === null) {
+      alert('Could not parse the calculated result. Please recalculate.');
+      return;
+    }
+
+    // Create scenario object
+    const scenario = {
+      id: Date.now(),
+      courseName: courseName,
+      courseId: course,
+      currentGrade: currentGrade,
+      finalWeight: finalWeight,
+      desiredGrade: desiredGrade,
+      requiredFinalGrade: requiredGrade,
+      savedAt: new Date().toLocaleString(),
+      timestamp: Date.now()
+    };
+
+    // Load existing scenarios
+    const { whatifScenarios = [] } = await chrome.storage.local.get('whatifScenarios');
+
+    // Add new scenario
+    whatifScenarios.push(scenario);
+
+    // Save to storage (keep only last 20 scenarios)
+    await chrome.storage.local.set({
+      whatifScenarios: whatifScenarios.slice(-20)
+    });
+
+    // Update display
+    await loadAndDisplayWhatifScenarios();
+    showStatus('success', `Scenario saved for ${courseName}`);
+
+  } catch (error) {
+    console.error('[What-If] Error saving scenario:', error);
+    showStatus('error', 'Failed to save scenario');
+  }
+}
+
+/**
+ * Load and display saved what-if scenarios
+ */
+async function loadAndDisplayWhatifScenarios() {
+  try {
+    const { whatifScenarios = [] } = await chrome.storage.local.get('whatifScenarios');
+
+    const scenariosSection = document.getElementById('savedScenariosSection');
+    const scenariosList = document.getElementById('savedScenariosList');
+
+    if (!scenariosSection || !scenariosList) return;
+
+    if (whatifScenarios.length === 0) {
+      scenariosSection.classList.add('hidden');
+      return;
+    }
+
+    scenariosSection.classList.remove('hidden');
+    scenariosList.innerHTML = '';
+
+    // Sort by date (newest first)
+    const sorted = [...whatifScenarios].sort((a, b) => b.timestamp - a.timestamp);
+
+    sorted.forEach(scenario => {
+      const card = document.createElement('div');
+      card.className = 'whatif-scenario-card';
+
+      const needsLabel = scenario.requiredFinalGrade > 100
+        ? `Impossible (need ${scenario.requiredFinalGrade.toFixed(1)}%)`
+        : `Need ${scenario.requiredFinalGrade.toFixed(1)}%`;
+
+      card.innerHTML = `
+        <div class="whatif-scenario-info">
+          <div class="whatif-scenario-course">${escapeHtml(scenario.courseName)}</div>
+          <div class="whatif-scenario-details">
+            <span>Current: <strong>${scenario.currentGrade.toFixed(1)}%</strong></span>
+            <span>Final weight: <strong>${scenario.finalWeight}%</strong></span>
+            <span>Target: <strong>${scenario.desiredGrade.toFixed(0)}%+</strong></span>
+            <span class="whatif-scenario-result">${needsLabel}</span>
+            <span style="font-size: 10px; color: var(--slate-500);">${scenario.savedAt}</span>
+          </div>
+        </div>
+        <div class="whatif-scenario-actions">
+          <button onclick="deleteWhatifScenario(${scenario.id})">Delete</button>
+        </div>
+      `;
+
+      scenariosList.appendChild(card);
+    });
+
+  } catch (error) {
+    console.error('[What-If] Error loading scenarios:', error);
+  }
+}
+
+/**
+ * Delete a what-if scenario
+ */
+async function deleteWhatifScenario(scenarioId) {
+  try {
+    const { whatifScenarios = [] } = await chrome.storage.local.get('whatifScenarios');
+    const filtered = whatifScenarios.filter(s => s.id !== scenarioId);
+
+    await chrome.storage.local.set({ whatifScenarios: filtered });
+    await loadAndDisplayWhatifScenarios();
+    showStatus('success', 'Scenario deleted');
+
+  } catch (error) {
+    console.error('[What-If] Error deleting scenario:', error);
+  }
 }
 
 /**
